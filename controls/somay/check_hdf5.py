@@ -9,6 +9,10 @@ import h5py
 from controls.base import CheckResult
 
 DANGEROUS_DRIVERS = {"family", "split", "multi"}
+# Regression guard: a forbidden construct left in the config text (even commented
+# out, or referenced as a "legacy path") means the loader policy can't be trusted
+# even when the allow_external_links flag itself reads as safe.
+FORBIDDEN_CONSTRUCTS = {"h5pset_external", "set_external_storage"}
 
 class ExternalRefRefused(Exception): pass
 
@@ -37,10 +41,20 @@ def run(target_dir: str) -> CheckResult:
     cfg = Path(target_dir) / "b4_hdf5" / "loader_policy.txt"
     if not cfg.exists():
         return CheckResult(4, "Loader refuses external refs", "FAIL",
-                           "no loader_policy.txt: loader is unconstrained (broken default)")
-    kv = _parse(cfg.read_text())
+                           "no b4_hdf5/loader_policy.txt: loader is unconstrained (broken default)")
+    raw = cfg.read_text()
+    kv = _parse(raw)
     allow_external = kv.get("allow_external_links") != "false"
     driver = kv.get("hdf5_driver", "")
+
+    # A forbidden construct anywhere in the file (even in a comment describing a
+    # "legacy path") means the policy can't be trusted, regardless of the flag.
+    lowered = raw.lower()
+    found = [c for c in FORBIDDEN_CONSTRUCTS if c in lowered]
+    if found:
+        return CheckResult(4, "Loader refuses external refs", "FAIL",
+                           f"forbidden construct present in loader policy: {', '.join(found)}",
+                           evidence=[str(cfg)])
 
     tmp = tempfile.mkdtemp(prefix="rule4_")
     secret_path, mal_path = os.path.join(tmp, "secret.h5"), os.path.join(tmp, "malicious.h5")

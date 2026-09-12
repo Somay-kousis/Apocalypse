@@ -1,0 +1,3 @@
+# Adversarial: worker env itself is clean...
+PATH=/usr/bin:/bin
+TS_AUTHKEY_MODE=ephemeral
