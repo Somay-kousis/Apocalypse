@@ -1,0 +1,3 @@
+# Broken: reusable Tailscale authkey sitting in worker env
+TS_AUTHKEY=tskey-auth-k7XyZ9-REUSABLE0000000000000000
+PATH=/usr/bin:/bin

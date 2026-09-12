@@ -1,0 +1,9 @@
+# Broken: unsealed, unattested, routed through shared registry infra
+sealed: false
+hash_attested: false
+route_to_shared_registry: true
+packages:
+  - name: numpy
+    version: 1.26.3
+  - name: pyyaml
+    version: 6.0.1

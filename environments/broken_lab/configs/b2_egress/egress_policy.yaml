@@ -1,0 +1,3 @@
+# Broken: allow-all egress (mirrors the July 2026 outbound C2 path)
+default: allow
+allowlist: []

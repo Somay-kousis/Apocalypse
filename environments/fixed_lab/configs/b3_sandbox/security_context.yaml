@@ -1,0 +1,9 @@
+# Hardened: non-root, no added caps, seccomp enforced, no egress
+runAsNonRoot: true
+runAsUser: 10001
+capabilities:
+  add: []
+  drop: [ALL]
+seccompProfile:
+  type: RuntimeDefault
+allowEgress: false

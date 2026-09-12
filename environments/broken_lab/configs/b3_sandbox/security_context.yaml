@@ -1,0 +1,9 @@
+# Broken: root, added caps, no seccomp, egress allowed
+runAsNonRoot: false
+runAsUser: 0
+capabilities:
+  add: [SYS_ADMIN, NET_RAW]
+  drop: []
+seccompProfile:
+  type: Unconfined
+allowEgress: true

@@ -1,0 +1,3 @@
+# Hardened: no reusable authkey in worker env (ephemeral, single-use only)
+PATH=/usr/bin:/bin
+TS_AUTHKEY_MODE=ephemeral

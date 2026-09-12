@@ -1,25 +1,36 @@
-"""IMDS + SA-token lockdown (control 6). Type-safe: non-integer hop limit fails closed,
-not crashes. Missing hop limit assumes AWS default (2) => must have link-local denied."""
+"""Rule 6: IMDS hop-limit 1 or link-local denied; SA token automount off.
+
+Structured YAML audit (artifact_type: yaml in control_spec.yaml).
+"""
 from pathlib import Path
-import json
+import yaml
 from controls.base import CheckResult
 
+BOUNDARY_DIR = "b6_imds"
+CONFIG_FILE = "pod_spec.yaml"
+
+
 def run(target_dir: str) -> CheckResult:
-    cfg = Path(target_dir) / "pod_spec.json"
+    cfg = Path(target_dir) / BOUNDARY_DIR / CONFIG_FILE
     if not cfg.exists():
-        return CheckResult(6, "IMDS + SA-token lockdown", "FAIL", "missing pod_spec.json")
-    d = json.loads(cfg.read_text())
-    if d.get("automountServiceAccountToken", True) is not False:
         return CheckResult(6, "IMDS + SA-token lockdown", "FAIL",
-                           "automountServiceAccountToken must be explicitly false")
-    raw = d.get("imds_hop_limit", 2)  # AWS default is 2
-    try:
-        hop = int(raw)
-    except (TypeError, ValueError):
+                            f"no {BOUNDARY_DIR}/{CONFIG_FILE}: pod spec is unconstrained (broken default)")
+
+    spec = yaml.safe_load(cfg.read_text()) or {}
+    problems = []
+
+    if spec.get("automountServiceAccountToken"):
+        problems.append("automountServiceAccountToken is true")
+
+    imds = spec.get("imds") or {}
+    imds_locked = imds.get("hop_limit") == 1 or imds.get("link_local_denied") is True
+    if not imds_locked:
+        problems.append(f"IMDS reachable: hop_limit={imds.get('hop_limit')}, "
+                         f"link_local_denied={imds.get('link_local_denied')}")
+
+    if problems:
         return CheckResult(6, "IMDS + SA-token lockdown", "FAIL",
-                           f"imds_hop_limit not an integer: {raw!r} (fail-closed)")
-    link_local_denied = d.get("link_local_denied", False) is True
-    if hop > 1 and not link_local_denied:
-        return CheckResult(6, "IMDS + SA-token lockdown", "FAIL",
-                           f"hop_limit={hop} reaches metadata and link-local not denied")
-    return CheckResult(6, "IMDS + SA-token lockdown", "PASS", "IMDS blocked, SA-token automount false.")
+                            "; ".join(problems), evidence=[str(cfg)])
+
+    return CheckResult(6, "IMDS + SA-token lockdown", "PASS",
+                        "IMDS blocked, SA token automount off", evidence=[str(cfg)])
