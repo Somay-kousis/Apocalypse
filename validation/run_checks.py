@@ -59,12 +59,27 @@ def _run_one(c: dict, target: str, context: dict) -> CheckResult:
         fn = getattr(mod, fn_name)
     except (ModuleNotFoundError, AttributeError):
         return CheckResult(c["id"], c["name"], "SKIP", "checker not implemented yet")
+
     try:
         if "context" in inspect.signature(fn).parameters:
             return fn(target, context=context)
         return fn(target)
     except NotImplementedError as e:
-        return CheckResult(c["id"], c["name"], "SKIP", f"checker not implemented yet ({e})")
+        return CheckResult(
+            c["id"],
+            c["name"],
+            "SKIP",
+            f"checker not implemented yet ({e})",
+        )
+    except Exception as e:
+        # FAIL-CLOSED: a checker that crashes on a hostile config must not
+        # blind the whole scorecard. That one control fails; the rest still run.
+        return CheckResult(
+            c["id"],
+            c["name"],
+            "FAIL",
+            f"checker raised {type(e).__name__}: {e} (fail-closed)",
+        )
 
 
 def run(target: str):
@@ -75,20 +90,24 @@ def run(target: str):
     for c in ordered:
         context[c["id"]] = _run_one(c, target, context)
 
-    # report in the spec's declared (id) order, independent of execution order
+    # Report in the spec's declared (id) order, independent of execution order.
     results = [context[c["id"]] for c in controls]
     passed = sum(1 for r in results if r.status == "PASS")
 
     print(f"\n=== Containment scorecard: {target} ===")
     for r in results:
         print(" ", r)
+
     implemented = [r for r in results if r.status != "SKIP"]
-    print(f"\n  {passed}/{len(controls)} controls PASS "
-          f"({len(implemented)} implemented, {len(controls) - len(implemented)} pending)")
+    print(
+        f"\n  {passed}/{len(controls)} controls PASS "
+        f"({len(implemented)} implemented, {len(controls) - len(implemented)} pending)"
+    )
     return results
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", required=True, help="path to a target configs/ dir")
-    run(ap.parse_args().target)
+    args = ap.parse_args()
+    run(args.target)

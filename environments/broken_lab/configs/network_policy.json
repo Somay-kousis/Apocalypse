@@ -1,0 +1,4 @@
+{
+  "egress_default": "allow",
+  "allowlist": []
+}

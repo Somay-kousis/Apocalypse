@@ -1,0 +1,5 @@
+{
+  "reusable_keys": false,
+  "ephemeral_keys": true,
+  "decoder_detection": true
+}
