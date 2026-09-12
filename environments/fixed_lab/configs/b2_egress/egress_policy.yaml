@@ -1,0 +1,7 @@
+# Hardened: deny-all default, short domain+SNI allowlist
+default: deny
+allowlist:
+  - domain: pypi.org
+    sni: pypi.org
+  - domain: files.pythonhosted.org
+    sni: files.pythonhosted.org

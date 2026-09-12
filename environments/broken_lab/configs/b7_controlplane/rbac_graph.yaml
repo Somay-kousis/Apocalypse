@@ -1,0 +1,6 @@
+# Broken: worker has an allowed edge straight to the API server
+nodes: [worker, kubernetes.default.svc]
+edges:
+  - from: worker
+    to: kubernetes.default.svc
+    allowed: true
