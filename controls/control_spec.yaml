@@ -12,10 +12,23 @@
 #   verification   : how a 3rd party checks it WITHOUT lab network access
 #   detection_sla  : if the control is bypassed, how fast detection must fire  [DRAFT-owner confirms]
 #   adoption_cost  : rough effort for a real org to adopt                       [DRAFT-owner confirms]
-#   check_module   : dotted path -> callable(target_dir) -> controls.base.CheckResult
+#   check_module   : dotted path -> callable(target_dir[, context]) -> controls.base.CheckResult
 #   sok_class      : class from arXiv:2607.25379 (paper 1)
 #   tested_vs_spec : "tested" (broken/fixed target exercises it) | "spec-only"
-#   depends_on     : boundaries this one composes (rule 9 only)
+#   depends_on     : boundaries this one composes (rule 9 only). run_checks.py
+#                    runs these first and passes their CheckResults in `context`.
+#
+# artifact_type / boundary_dir / config_file(s) - ADDED: pin down what a
+# checker actually reads, so "copy check_hdf5.py's pattern" stops meaning
+# "grep every artifact as if it were plain text". Three types in use:
+#   text  : plain config text, safe to .lower()/keyword-match (rules 4, 5, 8)
+#   yaml  : structured manifest - parse with yaml.safe_load, assert on fields,
+#           never string-match (rules 1, 2, 3, 6, 7)
+#   graph : cross-boundary reachability/composition data (rule 9 only) - reads
+#           its own boundary dir AND the `context` results from depends_on
+#
+# Every boundary_dir lives under <target_dir>/<boundary_dir>/, e.g.
+# environments/broken_lab/configs/b2_egress/egress_policy.yaml
 # ============================================================================
 
 controls:
@@ -30,7 +43,10 @@ controls:
     adoption_cost: "Medium - requires per-eval sealed mirror infra."       # DRAFT
     check_module: controls.junyi.check_registry:run
     sok_class: "supply-chain & credential exposure"
-    tested_vs_spec: spec-only
+    tested_vs_spec: tested
+    artifact_type: yaml
+    boundary_dir: b1_registry
+    config_file: mirror_manifest.yaml
 
   - id: 2
     name: Egress default-deny
@@ -44,6 +60,9 @@ controls:
     check_module: controls.vikas.check_egress:run
     sok_class: "persistent command-and-control"
     tested_vs_spec: tested
+    artifact_type: yaml
+    boundary_dir: b2_egress
+    config_file: egress_policy.yaml
 
   - id: 3
     name: Rootless code execution
@@ -57,6 +76,9 @@ controls:
     check_module: controls.junyi.check_sandbox:run
     sok_class: "objectives conflicting with sandbox boundaries"
     tested_vs_spec: tested
+    artifact_type: yaml
+    boundary_dir: b3_sandbox
+    config_file: security_context.yaml
 
   - id: 4
     name: Loader blocks external refs
@@ -70,6 +92,9 @@ controls:
     check_module: controls.somay.check_hdf5:run
     sok_class: "multi-step offensive chains"
     tested_vs_spec: tested
+    artifact_type: text
+    boundary_dir: b4_hdf5
+    config_file: loader_policy.txt
 
   - id: 5
     name: No template eval on untrusted config
@@ -83,6 +108,9 @@ controls:
     check_module: controls.somay.check_jinja:run
     sok_class: "multi-step offensive chains"
     tested_vs_spec: tested
+    artifact_type: text
+    boundary_dir: b5_jinja
+    config_file: config_pipeline.txt
 
   - id: 6
     name: IMDS + SA-token lockdown
@@ -96,6 +124,9 @@ controls:
     check_module: controls.vikas.check_imds:run
     sok_class: "supply-chain & credential exposure"
     tested_vs_spec: tested
+    artifact_type: yaml
+    boundary_dir: b6_imds
+    config_file: pod_spec.yaml
 
   - id: 7
     name: Control-plane unreachable from workers
@@ -109,6 +140,9 @@ controls:
     check_module: controls.vikas.check_controlplane:run
     sok_class: "multi-step offensive chains"
     tested_vs_spec: tested
+    artifact_type: yaml
+    boundary_dir: b7_controlplane
+    config_file: rbac_graph.yaml
 
   - id: 8
     name: No reusable VPN keys + startup detection
@@ -122,6 +156,10 @@ controls:
     check_module: controls.junyi.check_tailscale:run
     sok_class: "persistent command-and-control"
     tested_vs_spec: tested
+    artifact_type: text
+    boundary_dir: b8_tailscale
+    config_file: worker_env.txt
+    detection_log: alert_log.jsonl
 
   - id: 9
     name: Origin-scoped credentials + blast-radius bound
@@ -136,3 +174,7 @@ controls:
     sok_class: "supply-chain & credential exposure"
     tested_vs_spec: tested
     depends_on: [6, 7, 8]   # cross-boundary: composes these to compute combined reach
+    artifact_type: graph
+    boundary_dir: b9_credentials
+    config_file: credential_scope.yaml
+    graph_file: iam_graph.json
