@@ -13,7 +13,7 @@ from controls.base import CheckResult
 SSTI = "{{ ''.__class__.__mro__[1].__subclasses__() }}"
 
 def run(target_dir: str) -> CheckResult:
-    cfg = Path(target_dir) / "config_pipeline.txt"
+    cfg = Path(target_dir) / "b5_jinja" / "config_pipeline.txt"
     if not cfg.exists():
         return CheckResult(5, "No template eval on untrusted config", "FAIL",
                            "no config_pipeline.txt: template rendering on config unverified")
