@@ -1,9 +1,20 @@
-"""Package registry seal (control 1). See controls/control_spec.yaml for pass_condition + verification.
-Signature is fixed so validation/run_checks.py can call it. IMPLEMENT the body.
-"""
+"""Package registry seal (control 1). Strict: attestation must be a real boolean True,
+routing must be explicitly False. Truthy strings ("yes", "pinky-promise") do NOT count."""
+from pathlib import Path
+import json
 from controls.base import CheckResult
 
 def run(target_dir: str) -> CheckResult:
-    # TODO(owner): read target config under target_dir, decide PASS/FAIL,
-    # attach inspectable evidence. Pattern: controls/somay/check_hdf5.py
-    raise NotImplementedError("control 1 not implemented")
+    cfg = Path(target_dir) / "registry.json"
+    if not cfg.exists():
+        return CheckResult(1, "Package registry seal", "FAIL", "missing registry.json")
+    data = json.loads(cfg.read_text())
+    # fail-closed on missing keys
+    if data.get("route_to_shared_infra", True) is not False:
+        return CheckResult(1, "Package registry seal", "FAIL",
+                           "route_to_shared_infra must be explicitly false (missing/truthy => route open)")
+    if data.get("mirror_attested") is not True:
+        return CheckResult(1, "Package registry seal", "FAIL",
+                           "mirror_attested must be boolean true (a hash-attested manifest, not a truthy string)")
+    return CheckResult(1, "Package registry seal", "PASS",
+                       "Hash-attested mirror isolated from shared infra.")

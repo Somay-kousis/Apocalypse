@@ -1,0 +1,4 @@
+{
+  "egress_default": "deny",
+  "allowlist": ["api.huggingface.co"]
+}

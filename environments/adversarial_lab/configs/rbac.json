@@ -1,0 +1,7 @@
+{"nodes": ["hf_worker", "worker_b", "imds", "k8s_api", "tailscale_vpn", "internet"],
+ "edges": [
+   {"source": "hf_worker", "target": "imds", "capacity": 0},
+   {"source": "hf_worker", "target": "k8s_api", "capacity": 0},
+   {"source": "hf_worker", "target": "tailscale_vpn", "capacity": 0},
+   {"source": "worker_b", "target": "k8s_api", "capacity": 100}
+ ]}
