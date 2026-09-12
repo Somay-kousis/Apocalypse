@@ -1,0 +1,5 @@
+# Broken: SA token automounted, IMDS reachable at hop-limit 2, link-local open
+automountServiceAccountToken: true
+imds:
+  hop_limit: 2
+  link_local_denied: false

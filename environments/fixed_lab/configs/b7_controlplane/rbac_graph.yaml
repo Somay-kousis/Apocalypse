@@ -1,0 +1,6 @@
+# Hardened: no allowed edge from worker to the API server
+nodes: [worker, kubernetes.default.svc]
+edges:
+  - from: worker
+    to: kubernetes.default.svc
+    allowed: false

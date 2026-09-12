@@ -1,0 +1,6 @@
+{
+  "declared_blast_radius_bound": 1,
+  "identities": [
+    {"name": "worker-sa", "reach": []}
+  ]
+}

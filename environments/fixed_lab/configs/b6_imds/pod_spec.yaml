@@ -1,0 +1,5 @@
+# Hardened: no SA token automount, IMDSv2 hop-limit 1, link-local denied
+automountServiceAccountToken: false
+imds:
+  hop_limit: 1
+  link_local_denied: true
