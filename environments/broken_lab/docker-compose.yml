@@ -1,0 +1,8 @@
+# docker-compose.yml (Broken Lab)
+# This environment simulates the misconfigured state from the July 2026 incident.
+# It should contain the vulnerable package registry proxy, a public sandbox worker
+# running as root, an un-sealed metadata endpoint, and a vulnerable dataset processing pipeline.
+
+version: '3.8'
+services:
+  # TODO: Define the vulnerable worker and proxy services here

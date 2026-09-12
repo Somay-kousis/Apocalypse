@@ -1,0 +1,3 @@
+# Hardened dataset loader policy
+allow_external_links: false
+hdf5_driver: core   # driver-restricted opens only; external raw storage refused

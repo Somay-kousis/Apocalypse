@@ -1,0 +1,4 @@
+# Broken dataset loader policy (mirrors July 2026 HF misconfig)
+allow_external_links: true
+hdf5_driver: default
+# no restriction on external raw storage -> envu8.h5 can read /proc/self/environ
