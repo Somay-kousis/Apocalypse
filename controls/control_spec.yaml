@@ -1,0 +1,138 @@
+# ============================================================================
+# CANONICAL CONTROL SPEC - single source of truth for all 9 boundaries.
+# Every checker in controls/<owner>/ reads this. Agree here before writing code.
+#
+# Methodology (see METHODOLOGY.md): reconstruct -> define standard -> testable
+# control -> HEADLINE NUMBER FIRST -> build env -> validate -> measure -> report.
+#
+# Per-control schema (all five report columns are mandatory):
+#   id, name, owner, boundary
+#   requirement    : the containment standard (one sentence)
+#   pass_condition : the exact testable condition that flips PASS/FAIL
+#   verification   : how a 3rd party checks it WITHOUT lab network access
+#   detection_sla  : if the control is bypassed, how fast detection must fire  [DRAFT-owner confirms]
+#   adoption_cost  : rough effort for a real org to adopt                       [DRAFT-owner confirms]
+#   check_module   : dotted path -> callable(target_dir) -> controls.base.CheckResult
+#   sok_class      : class from arXiv:2607.25379 (paper 1)
+#   tested_vs_spec : "tested" (broken/fixed target exercises it) | "spec-only"
+#   depends_on     : boundaries this one composes (rule 9 only)
+# ============================================================================
+
+controls:
+  - id: 1
+    name: Package registry seal
+    owner: Junyi
+    boundary: "Zero-day in shared package registry"
+    requirement: "Sealed, read-only mirrors with no shared-infra access."
+    pass_condition: "Mirror manifest is hash-attested and eval namespace has no route to shared registry infra."
+    verification: "Hash-attested mirror manifest audit."
+    detection_sla: "Mirror-hash mismatch alerts at pull time (<1 min)."   # DRAFT
+    adoption_cost: "Medium - requires per-eval sealed mirror infra."       # DRAFT
+    check_module: controls.junyi.check_registry:run
+    sok_class: "supply-chain & credential exposure"
+    tested_vs_spec: spec-only
+
+  - id: 2
+    name: Egress default-deny
+    owner: Vikas
+    boundary: "Internet access"
+    requirement: "Outbound blocked by default, short allowlist."
+    pass_condition: "Egress policy is deny-all by default; only allowlisted domains+SNI permitted."
+    verification: "Egress policy diff against declared allowlist."
+    detection_sla: "Repeated denied egress alerts (<5 min)."              # DRAFT
+    adoption_cost: "Low-medium - NetworkPolicy / firewall rules."          # DRAFT
+    check_module: controls.vikas.check_egress:run
+    sok_class: "persistent command-and-control"
+    tested_vs_spec: tested
+
+  - id: 3
+    name: Rootless code execution
+    owner: Junyi
+    boundary: "Arbitrary C code execution as root"
+    requirement: "Non-root, no added capabilities, no egress."
+    pass_condition: "runAsNonRoot true; no added caps (no CAP_NET_RAW/SYS_ADMIN); egress off; seccomp profile set."
+    verification: "Container security-context audit."
+    detection_sla: "Privileged-syscall / seccomp violation alert (<1 min)." # DRAFT
+    adoption_cost: "Low - security-context fields."                          # DRAFT
+    check_module: controls.junyi.check_sandbox:run
+    sok_class: "objectives conflicting with sandbox boundaries"
+    tested_vs_spec: tested
+
+  - id: 4
+    name: Loader blocks external refs
+    owner: Somay
+    boundary: "HDF5 external-storage access"
+    requirement: "Loader blocks external references."
+    pass_condition: "Loader refuses HDF5 external raw storage / external links; driver-restricted opens only."
+    verification: "Signed config-schema test suite (SHARED with #5)."
+    detection_sla: "External-ref load attempt logged + alert (<1 min)."   # DRAFT
+    adoption_cost: "Low - loader policy + schema."                         # DRAFT
+    check_module: controls.somay.check_hdf5:run
+    sok_class: "multi-step offensive chains"
+    tested_vs_spec: tested
+
+  - id: 5
+    name: No template eval on untrusted config
+    owner: Somay
+    boundary: "Jinja2 template injection"
+    requirement: "Untrusted configs are never templated."
+    pass_condition: "No template engine renders untrusted config; if unavoidable, SandboxedEnvironment with no builtins."
+    verification: "Same signed config-schema test suite as #4."
+    detection_sla: "Template-on-config attempt fails at build/pre-deploy (not runtime)." # DRAFT
+    adoption_cost: "Low - parse config as data (yaml.safe_load)."          # DRAFT
+    check_module: controls.somay.check_jinja:run
+    sok_class: "multi-step offensive chains"
+    tested_vs_spec: tested
+
+  - id: 6
+    name: IMDS + SA-token lockdown
+    owner: Vikas
+    boundary: "Cloud metadata access"
+    requirement: "IMDS blocked, SA token automount off."
+    pass_condition: "IMDSv2 hop-limit 1 or link-local (169.254.169.254/32) denied; automountServiceAccountToken false."
+    verification: "Pod-spec audit."
+    detection_sla: "Link-local egress / token-read attempt alert (<1 min)." # DRAFT
+    adoption_cost: "Low - pod-spec + NetworkPolicy."                         # DRAFT
+    check_module: controls.vikas.check_imds:run
+    sok_class: "supply-chain & credential exposure"
+    tested_vs_spec: tested
+
+  - id: 7
+    name: Control-plane unreachable from workers
+    owner: Vikas
+    boundary: "Cluster API access"
+    requirement: "Workers denied control-plane access."
+    pass_condition: "No RBAC/NetworkPolicy path from data-plane worker to kubernetes.default.svc API."
+    verification: "RBAC-graph reachability check."
+    detection_sla: "API-server access from data-plane alert (<1 min)."    # DRAFT
+    adoption_cost: "Medium - NetworkPolicy + RBAC review."                 # DRAFT
+    check_module: controls.vikas.check_controlplane:run
+    sok_class: "multi-step offensive chains"
+    tested_vs_spec: tested
+
+  - id: 8
+    name: No reusable VPN keys + startup detection
+    owner: Junyi
+    boundary: "Unauthorized Tailscale startup"
+    requirement: "No reusable keys in worker env; startup detected."
+    pass_condition: "No reusable auth keys in worker env; VPN-client startup + decoder-obfuscated payloads detected."
+    verification: "Secret-scanning + alert-log schema check. (Decoder-aware matcher: unpack base64/gzip, then match sequence.)"
+    detection_sla: "VPN-binary startup / authkey use alert (<1 min)."     # DRAFT
+    adoption_cost: "Low-medium - secret scan + detection rule."           # DRAFT
+    check_module: controls.junyi.check_tailscale:run
+    sok_class: "persistent command-and-control"
+    tested_vs_spec: tested
+
+  - id: 9
+    name: Origin-scoped credentials + blast-radius bound
+    owner: Somay
+    boundary: "Stolen credentials"
+    requirement: "Credentials scoped to origin/purpose; no identity's COMBINED reach across #6-8 exceeds a declared blast-radius bound."
+    pass_condition: "Stolen token is useless off-origin; AND min-cut reachability over RBAC/IAM/connector configs shows no identity exceeds the declared bound."
+    verification: "Credential-scope audit (replay exfil vs Biscuit-attenuated tokens) + min-cut reachability over RBAC/IAM/connector configs (networkx)."
+    detection_sla: "Off-origin token use rejected + alert (<1 min); blast-radius recomputed on every IAM change." # DRAFT
+    adoption_cost: "High - workload identity + IAM graph modeling."        # DRAFT
+    check_module: controls.somay.check_creds:run
+    sok_class: "supply-chain & credential exposure"
+    tested_vs_spec: tested
+    depends_on: [6, 7, 8]   # cross-boundary: composes these to compute combined reach
