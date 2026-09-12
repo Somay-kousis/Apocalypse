@@ -1,0 +1,3 @@
+# Broken config pipeline
+# dataset config is rendered through Jinja2 to resolve fsspec reference spec
+config = jinja2.Template(user_config).render()   # <-- template injection

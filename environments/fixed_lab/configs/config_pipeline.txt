@@ -1,0 +1,4 @@
+# Hardened config pipeline
+# dataset config parsed as plain data - NO template rendering on untrusted config
+config = yaml.safe_load(user_config)
+# if templating is ever unavoidable, use SandboxedEnvironment with no builtins
