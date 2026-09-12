@@ -39,7 +39,7 @@ def main(target: str):
         print(f"  [{tag:9}] rule {rid}  {cmd['t']}  {cmd['cmd'][:64]}")
 
     if context:
-        print(f"\n  -- context-only steps (not counted, see command note) --")
+        print("\n  -- context-only steps (not counted, see command note) --")
         for cmd in context:
             print(f"  [context  ] {cmd['t']}  {cmd['cmd'][:64]}  -- {cmd.get('note', '')}")
 

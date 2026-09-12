@@ -45,12 +45,9 @@ def run(target_dir: str) -> CheckResult:
     hop_limit = _hop_limit(imds)
     http_tokens = _http_tokens(imds)
 
-    if link_local_denied:
-        imds_locked = True
-    elif hop_limit == 1 and http_tokens == "required":
-        imds_locked = True
-    else:
-        imds_locked = False
+    imds_locked = link_local_denied or (hop_limit == 1 and http_tokens == "required")
+
+    if not imds_locked:
         reasons = [f"link_local_denied={imds.get('link_local_denied')!r}"]
         if http_tokens != "required":
             reasons.append(f"http_tokens={http_tokens or 'unset'!r} (IMDSv1 still reachable; must be 'required')")

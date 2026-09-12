@@ -31,8 +31,8 @@ def run(target_dir: str) -> CheckResult:
     if manifest.get("hash_attested") is not True:
         problems.append(f"hash_attested must be boolean true, not a truthy string (got {manifest.get('hash_attested')!r})")
     if manifest.get("route_to_shared_registry") is not False:
-        problems.append(f"route_to_shared_registry must be explicitly false "
-                         f"(missing/truthy => route to shared registry infra is open)")
+        problems.append("route_to_shared_registry must be explicitly false "
+                         "(missing/truthy => route to shared registry infra is open)")
 
     packages = manifest.get("packages") or []
     if not packages:

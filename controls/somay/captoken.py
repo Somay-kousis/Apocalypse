@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
-from cryptography.exceptions import InvalidSignature
 
 _CAVEAT = re.compile(r"^(\w+)\(([^)]*)\)$")
 
