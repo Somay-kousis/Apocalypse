@@ -23,12 +23,17 @@ def run(target: str):
     results, passed = [], 0
     for c in controls:
         mod_path, fn = c["check_module"].split(":")
+        from controls.base import CheckResult
         try:
             mod = importlib.import_module(mod_path)
             res = getattr(mod, fn)(target)
-        except (ModuleNotFoundError, AttributeError):
-            from controls.base import CheckResult
+        except (ModuleNotFoundError, AttributeError, NotImplementedError):
             res = CheckResult(c["id"], c["name"], "SKIP", "checker not implemented yet")
+        except Exception as e:
+            # FAIL-CLOSED: a checker that crashes on a hostile config must not
+            # blind the whole scorecard. That one control fails; the rest still run.
+            res = CheckResult(c["id"], c["name"], "FAIL",
+                              f"checker raised {type(e).__name__}: {e} (fail-closed)")
         results.append(res)
         if res.status == "PASS":
             passed += 1
