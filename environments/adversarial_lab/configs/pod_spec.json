@@ -1,0 +1,13 @@
+{
+  "runAsNonRoot": true,
+  "runAsUser": "0",
+  "privileged": true,
+  "added_caps": [
+    "CAP_SYS_MODULE",
+    "CAP_DAC_OVERRIDE"
+  ],
+  "seccomp_profile": "Unconfined",
+  "automountServiceAccountToken": false,
+  "imds_hop_limit": "2",
+  "link_local_denied": false
+}

@@ -1,0 +1,4 @@
+# hardened? no. commented decoy below, active setting is true
+# allow_external_links: false
+allow_external_links: true
+hdf5_driver: family
