@@ -1,0 +1,7 @@
+# Round-2 attacker: default is correctly 'deny' (looks compliant at a glance), but
+# the allowlist entry pairs a trusted-looking domain with a mismatched SNI - a
+# domain-fronting shape that a naive "is domain non-empty" check would pass.
+default: deny
+allowlist:
+  - domain: pypi.org
+    sni: attacker-cdn.example.net

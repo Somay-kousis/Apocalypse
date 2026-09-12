@@ -1,5 +1,8 @@
-# Hardened: no SA token automount, IMDSv2 hop-limit 1, link-local denied
+# Hardened: no SA token automount, IMDSv2-only (http_tokens required) with
+# hop-limit 1, AND link-local denied at the network layer (belt + suspenders -
+# link_local_denied alone already satisfies the rule).
 automountServiceAccountToken: false
 imds:
   hop_limit: 1
+  http_tokens: required
   link_local_denied: true

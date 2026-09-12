@@ -1,0 +1,7 @@
+# Round-2 attacker: hop_limit is quoted as a string ("1") to try to dodge an
+# int-only comparison, AND http_tokens is left unset (IMDSv1 still enabled) -
+# hop-limit alone is not real IMDS hardening.
+automountServiceAccountToken: false
+imds:
+  hop_limit: "1"
+  link_local_denied: false

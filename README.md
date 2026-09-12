@@ -10,7 +10,7 @@ laptop in seconds and watches the score move from 0/9 (broken) to 9/9 (fixed). T
 Track 1's literal success bar: *verifiable by third parties without lab network access* - offline,
 no API keys, no cluster.
 
-Current status: **fixed 9/9 - broken / exploit / adversarial 0/9 - replay 14/14 - fail-closed.**
+Current status: **fixed 9/9 - broken / exploit / adversarial 0/9 - replay 13/13 - fail-closed.**
 
 ## The evidence constraint (read this first)
 There is **no 17,600-action corpus**. Hugging Face's "interactive replay" ships no JSON/CSV/IOC/YARA -
@@ -29,7 +29,8 @@ larger corpus - it does not exist (also a finding for the report's limitations s
   `exploit_lab` + `adversarial_lab` (attacker configs used to red-team the checkers). Each has a
   `configs/` dir the checkers read. `boundaries/README.md` maps the 9 abstractions.
 - `validation/run_checks.py` - scorecard runner (N/9), **fail-closed** (a hostile config fails one
-  rule, never crashes the suite). `replay_attack.py` - replays the 14 documented steps vs a target.
+  rule, never crashes the suite). `replay_attack.py` - replays the 13 boundary-testing steps (of
+  14 documented commands - 3 are context-only recon/cleanup, not boundary tests) vs a target.
   Both **offline, no keys**. `adaptive_agent.py` - optional LLM stretch (only thing needing a key).
 - `analysis/threshold_model.ipynb` - headline number from the public day counts.
 - `report/` - draft, control matrix, `figures/trust_boundaries.png` (+ its generator).
@@ -41,7 +42,7 @@ larger corpus - it does not exist (also a finding for the report's limitations s
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m validation.run_checks    --target environments/fixed_lab/configs    # 9/9
 .venv/bin/python -m validation.run_checks    --target environments/broken_lab/configs   # 0/9
-.venv/bin/python -m validation.replay_attack --target environments/fixed_lab/configs    # 14/14 blocked
+.venv/bin/python -m validation.replay_attack --target environments/fixed_lab/configs    # 13/13 blocked
 .venv/bin/python -m pytest tests/ -q                                                    # 10 passed
 ```
 
