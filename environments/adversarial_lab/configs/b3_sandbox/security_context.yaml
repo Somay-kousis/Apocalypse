@@ -1,0 +1,11 @@
+# Adversarial: string "0" root, privileged, extra caps, seccomp Unconfined -
+# same shape as RED_TEAM.md finding #3
+runAsNonRoot: true
+runAsUser: "0"
+privileged: true
+capabilities:
+  add: [SYS_MODULE, DAC_OVERRIDE]
+  drop: []
+seccompProfile:
+  type: Unconfined
+allowEgress: false

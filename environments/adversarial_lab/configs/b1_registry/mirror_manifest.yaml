@@ -1,0 +1,8 @@
+# Adversarial: truthy string instead of real boolean for hash_attested
+sealed: true
+hash_attested: "pinky-promise"
+route_to_shared_registry: false
+packages:
+  - name: numpy
+    version: 1.26.3
+    sha256: b1e2c3d4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2

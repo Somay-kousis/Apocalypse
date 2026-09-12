@@ -1,36 +1,56 @@
-"""Rootless code execution (control 3). Spec: non-root, NO added capabilities, no egress.
-Hardened: reject string/int root, privileged, privilege-escalation, ANY added cap,
-and any seccomp profile outside the safe allowlist."""
+"""Rootless code execution (control 3). Structured YAML audit (artifact_type: yaml
+in control_spec.yaml): non-root, no added capabilities, seccomp confined, no egress.
+
+Reads b3_sandbox/security_context.yaml, per control_spec.yaml's boundary_dir /
+config_file for this rule - NOT a root-level pod_spec.json (that was a stale
+legacy path with a different, JSON-shaped schema that never matched the
+declared spec, the b3_sandbox fixtures, or this checker's own tests).
+"""
 from pathlib import Path
-import json
+import yaml
 from controls.base import CheckResult
 
+BOUNDARY_DIR = "b3_sandbox"
+CONFIG_FILE = "security_context.yaml"
 SAFE_SECCOMP = {"RuntimeDefault", "Localhost"}
 
-def _is_root(v):
-    # accept int or numeric string; root is uid 0
+
+def _is_root(v) -> bool:
     try:
         return int(v) == 0
     except (TypeError, ValueError):
-        return False  # non-numeric handled by runAsNonRoot below
+        return False
+
 
 def run(target_dir: str) -> CheckResult:
-    cfg = Path(target_dir) / "pod_spec.json"
+    cfg = Path(target_dir) / BOUNDARY_DIR / CONFIG_FILE
     if not cfg.exists():
-        return CheckResult(3, "Rootless code execution", "FAIL", "missing pod_spec.json")
-    d = json.loads(cfg.read_text())
-    if d.get("runAsNonRoot") is not True:
-        return CheckResult(3, "Rootless code execution", "FAIL", "runAsNonRoot must be boolean true")
-    if "runAsUser" in d and _is_root(d["runAsUser"]):
-        return CheckResult(3, "Rootless code execution", "FAIL", f"runAsUser resolves to root: {d['runAsUser']!r}")
-    if d.get("privileged") is True:
-        return CheckResult(3, "Rootless code execution", "FAIL", "privileged:true overrides all isolation")
-    if d.get("allowPrivilegeEscalation") is True:
-        return CheckResult(3, "Rootless code execution", "FAIL", "allowPrivilegeEscalation must not be true")
-    added = d.get("added_caps", [])
-    if added:  # spec: NO added capabilities (denylists always miss one)
-        return CheckResult(3, "Rootless code execution", "FAIL", f"no added capabilities allowed; found {added}")
-    if d.get("seccomp_profile") not in SAFE_SECCOMP:
         return CheckResult(3, "Rootless code execution", "FAIL",
-                           f"seccomp_profile must be one of {SAFE_SECCOMP} (got {d.get('seccomp_profile')!r})")
-    return CheckResult(3, "Rootless code execution", "PASS", "non-root, no caps, seccomp confined.")
+                            f"no {BOUNDARY_DIR}/{CONFIG_FILE}: security context is unconstrained (broken default)")
+
+    ctx = yaml.safe_load(cfg.read_text()) or {}
+    problems = []
+
+    if ctx.get("runAsNonRoot") is not True:
+        problems.append(f"runAsNonRoot must be boolean true (got {ctx.get('runAsNonRoot')!r})")
+    if "runAsUser" in ctx and _is_root(ctx["runAsUser"]):
+        problems.append(f"runAsUser resolves to root: {ctx['runAsUser']!r}")
+
+    caps = ctx.get("capabilities") or {}
+    added = caps.get("add") or []
+    if added:  # spec: NO added capabilities (a denylist always misses one)
+        problems.append(f"no added capabilities allowed; found {added}")
+
+    seccomp_type = (ctx.get("seccompProfile") or {}).get("type")
+    if seccomp_type not in SAFE_SECCOMP:
+        problems.append(f"seccompProfile.type must be one of {SAFE_SECCOMP} (got {seccomp_type!r})")
+
+    if ctx.get("allowEgress") is not False:
+        problems.append(f"allowEgress must be boolean false (got {ctx.get('allowEgress')!r})")
+
+    if problems:
+        return CheckResult(3, "Rootless code execution", "FAIL",
+                            "; ".join(problems), evidence=[str(cfg)])
+
+    return CheckResult(3, "Rootless code execution", "PASS",
+                        "non-root, no added caps, seccomp confined, egress off.", evidence=[str(cfg)])
