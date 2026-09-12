@@ -1,0 +1,2 @@
+from jinja2 import Template
+config = Template(user_config).render()
