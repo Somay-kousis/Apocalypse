@@ -1,4 +1,6 @@
-# Hardened config pipeline
-# dataset config parsed as plain data - NO template rendering on untrusted config
+# Hardened config pipeline.
+# Preferred: parse untrusted dataset config as data, never template it.
 config = yaml.safe_load(user_config)
-# if templating is ever unavoidable, use SandboxedEnvironment with no builtins
+# If templating is ever unavoidable, ONLY a SandboxedEnvironment with no builtins:
+from jinja2.sandbox import SandboxedEnvironment
+env = SandboxedEnvironment()
