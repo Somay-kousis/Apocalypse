@@ -1,8 +1,0 @@
-# docker-compose.yml (Fixed Lab)
-# This environment represents the hardened state containing all 9 containment rules.
-# It implements egress filtering, sealed mirrors, rootless containers, blocked IMDS,
-# and highly attenuated Biscuit tokens for identity scoping.
-
-version: '3.8'
-services:
-  # TODO: Define the hardened worker and isolated network policies here
