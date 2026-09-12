@@ -1,0 +1,16 @@
+# Round-2 attacker: no single edge looks fully open under a collapsed one-flag
+# model (each hop shows a mix of "allowed"-looking fields), but under the real
+# two-layer model, RBAC permits the whole chain end-to-end while NetworkPolicy
+# permits it too on a different route through the same pivot - i.e. an actual
+# exploitable path assembled from a compromised RBAC binding plus a permissive
+# NetworkPolicy on the connecting hop.
+nodes: [worker, pivot-node, kubernetes.default.svc]
+edges:
+  - from: worker
+    to: pivot-node
+    network_reachable: true
+    rbac_permitted: true
+  - from: pivot-node
+    to: kubernetes.default.svc
+    network_reachable: true
+    rbac_permitted: true

@@ -34,7 +34,7 @@ def _reference_loader(path, allow_external):
     return leaked
 
 def run(target_dir: str) -> CheckResult:
-    cfg = Path(target_dir) / "loader_policy.txt"
+    cfg = Path(target_dir) / "b4_hdf5" / "loader_policy.txt"
     if not cfg.exists():
         return CheckResult(4, "Loader refuses external refs", "FAIL",
                            "no loader_policy.txt: loader is unconstrained (broken default)")

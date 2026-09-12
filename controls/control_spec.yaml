@@ -53,8 +53,8 @@ controls:
     owner: Vikas
     boundary: "Internet access"
     requirement: "Outbound blocked by default, short allowlist."
-    pass_condition: "Egress policy is deny-all by default; only allowlisted domains+SNI permitted."
-    verification: "Egress policy diff against declared allowlist."
+    pass_condition: "Egress policy is deny-all by default; allowlist entries have matching domain+SNI (no fronting), no wildcards or IP literals, no bare single-label domains; allowlist non-empty."
+    verification: "Egress policy audit: default-deny + per-entry domain/SNI-agreement, wildcard, and IP-literal checks (controls/vikas/check_egress.py)."
     detection_sla: "Repeated denied egress alerts (<5 min)."              # DRAFT
     adoption_cost: "Low-medium - NetworkPolicy / firewall rules."          # DRAFT
     check_module: controls.vikas.check_egress:run
@@ -117,8 +117,8 @@ controls:
     owner: Vikas
     boundary: "Cloud metadata access"
     requirement: "IMDS blocked, SA token automount off."
-    pass_condition: "IMDSv2 hop-limit 1 or link-local (169.254.169.254/32) denied; automountServiceAccountToken false."
-    verification: "Pod-spec audit."
+    pass_condition: "Link-local (169.254.169.254/32) denied outright, OR IMDSv2-only (HttpTokens required) with hop-limit 1 (hop-limit alone is not sufficient); automountServiceAccountToken strictly boolean false."
+    verification: "Pod-spec audit: link-local/hop-limit/http-tokens combination + type-strict automount check (controls/vikas/check_imds.py)."
     detection_sla: "Link-local egress / token-read attempt alert (<1 min)." # DRAFT
     adoption_cost: "Low - pod-spec + NetworkPolicy."                         # DRAFT
     check_module: controls.vikas.check_imds:run
@@ -133,8 +133,8 @@ controls:
     owner: Vikas
     boundary: "Cluster API access"
     requirement: "Workers denied control-plane access."
-    pass_condition: "No RBAC/NetworkPolicy path from data-plane worker to kubernetes.default.svc API."
-    verification: "RBAC-graph reachability check."
+    pass_condition: "No path from a data-plane worker to kubernetes.default.svc API where BOTH NetworkPolicy (network_reachable) AND RBAC (rbac_permitted) permit it at every hop; single-layer-open edges are flagged as a hardening note."
+    verification: "RBAC/NetworkPolicy two-layer graph reachability check (controls/vikas/check_controlplane.py)."
     detection_sla: "API-server access from data-plane alert (<1 min)."    # DRAFT
     adoption_cost: "Medium - NetworkPolicy + RBAC review."                 # DRAFT
     check_module: controls.vikas.check_controlplane:run
