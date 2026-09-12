@@ -1,0 +1,7 @@
+{
+  "runAsNonRoot": true,
+  "added_caps": [],
+  "seccomp_profile": "RuntimeDefault",
+  "automountServiceAccountToken": false,
+  "imds_hop_limit": 1
+}

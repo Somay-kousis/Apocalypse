@@ -1,0 +1,7 @@
+{
+  "runAsNonRoot": false,
+  "added_caps": ["CAP_SYS_ADMIN"],
+  "seccomp_profile": null,
+  "automountServiceAccountToken": true,
+  "imds_hop_limit": 2
+}
