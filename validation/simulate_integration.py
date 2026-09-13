@@ -31,7 +31,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
 
-from controls.somay.captoken import attenuate, issue, verify
+from controls.somay.captoken import attenuate, issue, seal, verify
 from controls.somay.check_hdf5 import ExternalRefRefused, _reference_loader
 from controls.somay.check_jinja import SSTI
 from validation.measure_sla import print_report
@@ -308,7 +308,8 @@ def _rule8_probe(work_dir: Path, trial: int):
 def _rule9_probe(work_dir: Path, trial: int):
     root_secret = Ed25519PrivateKey.generate()
     token, holder_secret = issue(root_secret, ["purpose(eval)"])
-    token, _ = attenuate(token, holder_secret, ["origin(eval-worker)"])
+    token, holder_secret = attenuate(token, holder_secret, ["origin(eval-worker)"])
+    token = seal(token, holder_secret)  # sealed => off-origin rejection is the caveat, not the missing seal
 
     def operation():
         try:
