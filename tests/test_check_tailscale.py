@@ -171,3 +171,15 @@ def test_fail_when_non_vpn_attack_event_misses_sla(tmp_path):
 def test_fail_when_missing_files(tmp_path):
     res = check_tailscale.run(str(tmp_path))
     assert res.status == "FAIL"
+
+
+def test_base85_encoded_authkey_caught(tmp_path):
+    """Red-team regression: an ascii85/base85-encoded reusable authkey must be decoded and caught."""
+    for enc in (base64.a85encode, base64.b85encode):
+        env = ("TS_AUTHKEY_MODE=ephemeral\nTS_AUTHKEY_EXPIRATION_HOURS=12\n"
+               "K=" + enc(b"tskey-auth-REUSABLEabc123").decode() + "\n")
+        write(tmp_path, "b8_tailscale", "worker_env.txt", env)
+        write(tmp_path, "b8_tailscale", "alert_log.jsonl",
+              open("environments/fixed_lab/configs/b8_tailscale/alert_log.jsonl").read())
+        res = check_tailscale.run(str(tmp_path))
+        assert res.status == "FAIL" and "authkey" in res.detail.lower()
