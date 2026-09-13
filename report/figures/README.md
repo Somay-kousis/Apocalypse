@@ -22,3 +22,13 @@ detection-quality aggregate comes from `python -m validation.evaluate_detection`
 | `vuln_coverage.png` | Our controls mapped onto arXiv:2607.25379's 5 vulnerability classes - full coverage (class 5 by the quarantine) |
 
 Regenerate advanced: `python report/figures/make_advanced_plots.py`
+
+## Hero / striking shapes - `make_wow_plots.py`
+Eye-catching forms for a title/hero slot. For the paper body, still lead with the clear plots.
+| File | What it shows |
+|------|---------------|
+| `cumulative_prevented.png` | Flowing cumulative-actions area; the shaded region (~94%) is the attack that never runs under early quarantine |
+| `killchain_flow.png` | Ribbon flow on one axis: broken flows to the crown jewels, hardened is severed at boundary 1 |
+| `redteam_radial.png` | Polar/radial bars: 28 bypasses closed per boundary |
+
+Regenerate: `python report/figures/make_wow_plots.py`
