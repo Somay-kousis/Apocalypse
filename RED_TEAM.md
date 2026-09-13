@@ -29,6 +29,8 @@ originally PASSed (a false negative), plus the fix. Reproduce with `environments
 | 3b | A context with `runAsNonRoot:true` could still set `privileged:true`, allow privilege escalation, keep a writable root filesystem, or omit `drop: [ALL]` | checker enforced only UID, added caps, seccomp, and egress | require strict false for privileged/escalation, strict true for read-only rootfs, and `drop: ALL` |
 | 8b | One event could self-report `sequence_matched:true`; events from different workers, a slow alert, or a 100-year "ephemeral" policy were not independently rejected | trusted summary booleans and never correlated event evidence or calculated latency | correlate four ordered detected events for one workload, enforce VPN alert <=60s, and require ephemeral expiry <=24h |
 | 8c | Repeated base64 wrapping could hide a gzip-packed auth key from the one-pass decoder | decoder inspected only the first encoding layer | bounded recursive decoding (4 layers, 64 KiB output cap) before auth-key matching |
+| 8d | A reusable Tailscale auth key encoded as hex (likewise base32, URL-safe base64, or percent-URL encoding) passed the decoder-aware scan | decoder only attempted standard base64 and gzip even though its description implied broader decoder awareness | recursively attempt the explicitly documented standard/URL-safe base64, base32, hex, percent-URL, and gzip formats under the existing depth/output bounds; add one regression per format and a hex adversarial fixture |
+| 8e | A complete detected sequence for one workload masked an undetected `vpn_binary_start` on another workload | sequence validation returned PASS on the first clean workload (ANY semantics) | audit every workload containing any required attack event and require each to have the complete, ordered, detected, on-time sequence (ALL semantics) |
 
 ## Post-fix scorecard (offline, seconds)
 - `fixed_lab`      -> 9/9 PASS (was silently 7/9 until the hdf5/jinja path fix above)
@@ -36,10 +38,17 @@ originally PASSed (a false negative), plus the fix. Reproduce with `environments
 - `exploit_lab`    -> 0/9 (round-1 attacker configs; now includes b1/b2/b3/b6/b7/b8/b9 fixtures)
 - `adversarial_lab`-> 0/9 (round-2, these bypasses; now includes b1/b2/b3/b6/b7/b8/b9 fixtures)
 - malformed JSON   -> fails the affected rule, suite still completes (fail-closed)
-- `pytest tests/`  -> 76/76 passing (includes 12 focused regressions for the rule 1/3/8 hardening above)
+- `pytest tests/`  -> 116/116 passing; focused Rule 8 regressions now include each supported
+  encoding and the multi-workload masking case
 
 ## Known limitations (be honest in the report)
 - Mock-level: checkers audit JSON/text config surfaces, not a live cluster. Same shape as a real
   static admission audit, but a real deployment needs the runtime probe (stretch goal).
+- Rule 1 proves supplied-artifact integrity relative to the supplied manifest, not publisher
+  authenticity. A compromised mirror can replace both bytes and hashes; closing that gap requires
+  an independent trust anchor such as a verified publisher signature or transparency-log reference.
+- Rule 8's decoder coverage is deliberately finite: standard/URL-safe base64, base32, hex,
+  percent-URL, and gzip, recursively up to four layers and 64 KiB decoded output. It does not claim
+  to recognize arbitrary encryption or every possible serialization.
 - Node role inference is substring-based (`worker`/`api`/`control`) - can over-match; fails safe
   (over-flags) rather than under-flags. A real version keys off labels/roles, not names.

@@ -173,8 +173,8 @@ controls:
     owner: Junyi
     boundary: "Unauthorized Tailscale startup"
     requirement: "No auth keys in worker env; ephemeral key policy expires within 24 hours; the full intrusion sequence and VPN startup are detected."
-    pass_condition: "No plaintext or nested base64/gzip auth key in worker env; key policy is ephemeral and <=24h; one workload's env-dump -> binary-stage -> IMDS -> VPN-start events are ordered, detected, and VPN alert latency is <=60s."
-    verification: "Bounded recursive secret decoding plus independent JSONL event correlation and alert-latency calculation."
+    pass_condition: "No plaintext or recursively encoded auth key in worker env across the explicitly supported base64, URL-safe base64, base32, hex, percent-URL, and gzip formats; key policy is ephemeral and <=24h; every workload containing an attack-sequence event has the complete env-dump -> binary-stage -> IMDS -> VPN-start sequence ordered, detected, and alerted within <=60s per event."
+    verification: "Bounded recursive decoding of the supported formats plus all-workload JSONL event correlation and alert-latency calculation."
     detection_sla: "VPN-binary startup / authkey use alert (<1 min)."     # DRAFT
     detection_event: vpn_binary_start
     detection_sla_seconds: 60

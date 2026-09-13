@@ -52,7 +52,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m validation.simulate_detection --output /tmp/apocalypse-sla --trials 100
 .venv/bin/python -m validation.simulate_integration --output /tmp/apocalypse-integration --trials 3
 .venv/bin/python -m validation.evaluate_detection --output /tmp/apocalypse-quality
-.venv/bin/python -m pytest tests/ -q                                                    # 103 passed
+.venv/bin/python -m pytest tests/ -q                                                    # 116 passed
 ```
 
 Simulator latency covers only local in-process matching. It does not measure production sensors,

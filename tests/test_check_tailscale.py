@@ -2,6 +2,8 @@ import base64
 import gzip
 import json
 
+import pytest
+
 from controls.junyi import check_tailscale
 from tests.conftest import write
 
@@ -65,7 +67,7 @@ def test_fail_when_single_event_claims_sequence_matched(tmp_path):
     )
     res = check_tailscale.run(str(tmp_path))
     assert res.status == "FAIL"
-    assert "no single workload" in res.detail
+    assert "workload_id" in res.detail
 
 
 def test_fail_when_sequence_is_split_across_workloads(tmp_path):
@@ -106,6 +108,64 @@ def test_fail_when_authkey_is_nested_base64_gzip(tmp_path):
     res = check_tailscale.run(str(tmp_path))
     assert res.status == "FAIL"
     assert "decoder-obfuscated" in res.detail
+
+
+def _percent_encode(raw):
+    return "".join(f"%{byte:02X}" for byte in raw)
+
+
+@pytest.mark.parametrize(
+    "encoded",
+    [
+        lambda key: key.hex(),
+        lambda key: base64.b32encode(key).decode(),
+        lambda key: base64.urlsafe_b64encode(key).decode(),
+        _percent_encode,
+        lambda key: base64.b32encode(key.hex().encode()).decode(),
+    ],
+    ids=["hex", "base32", "urlsafe-base64", "percent-url", "nested-base32-hex"],
+)
+def test_fail_when_authkey_uses_supported_encoding(tmp_path, encoded):
+    key = b"tskey-auth-abc123-REUSABLE0000000000000000"
+    write(tmp_path, "b8_tailscale", "worker_env.txt", clean_env() + f"BLOB={encoded(key)}\n")
+    write(tmp_path, "b8_tailscale", "alert_log.jsonl", detection_sequence())
+    res = check_tailscale.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "decoder-obfuscated" in res.detail
+
+
+def test_fail_when_clean_workload_masks_undetected_second_workload(tmp_path):
+    masked = detection_sequence("clean-worker") + json.dumps({
+        "event": "vpn_binary_start",
+        "workload_id": "attacker-worker-99",
+        "occurred_at": "2026-07-12T00:05:00Z",
+        "detected": False,
+    }) + "\n"
+    write(tmp_path, "b8_tailscale", "worker_env.txt", clean_env())
+    write(tmp_path, "b8_tailscale", "alert_log.jsonl", masked)
+    res = check_tailscale.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "attacker-worker-99 was not detected" in res.detail
+
+
+def test_pass_when_every_workload_has_clean_sequence(tmp_path):
+    events = detection_sequence("worker-a") + detection_sequence("worker-b")
+    write(tmp_path, "b8_tailscale", "worker_env.txt", clean_env())
+    write(tmp_path, "b8_tailscale", "alert_log.jsonl", events)
+    res = check_tailscale.run(str(tmp_path))
+    assert res.status == "PASS"
+
+
+def test_fail_when_non_vpn_attack_event_misses_sla(tmp_path):
+    rows = detection_sequence().replace(
+        '"alerted_at": "2026-07-12T00:00:05Z"',
+        '"alerted_at": "2026-07-12T00:01:01Z"',
+    )
+    write(tmp_path, "b8_tailscale", "worker_env.txt", clean_env())
+    write(tmp_path, "b8_tailscale", "alert_log.jsonl", rows)
+    res = check_tailscale.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "env_dump alert missed" in res.detail
 
 
 def test_fail_when_missing_files(tmp_path):
