@@ -21,12 +21,18 @@ Measurement outputs required by the brief. Numbers come from `validation/`.
   3 are context-only recon/cleanup evidence, not boundary tests; see `replay_attack.py` output).
 - Per-control: each of the 9 rules mapped natively to intercept at least 1 of the 13 steps.
 
-## Adaptive agent (`adaptive_agent.py`, N = 100 trials)  [optional / stretch]
-- Survival rate per control: 0% (blocked deterministically at containment boundaries)
-- Alternative paths found (outside the 13 known steps): 0
+## Adaptive agent (`adaptive_agent.py`) [optional / stretch]
+- Trials run: N = 0. The optional runner requires an API key and remains unimplemented.
+- Survival rate per control: not measured.
+- Alternative paths found outside the 13 known steps: not measured.
+- The deterministic 13/13 known-path result above must not be interpreted as adaptive-agent evidence.
 
 ## Detection SLA
-- SLA hits / misses per control: 9 / 0 (all boundary controls configured to log violations under 1 min SLA)
+- Fixture-evidence SLA hits / misses: 1 / 0 for rule 8. Its correlated VPN-start event was
+  alerted after 24 seconds, satisfying the declared <1 minute target.
+- Rules 1-7 and 9 declare detection targets in `controls/control_spec.yaml`, but their checkers do
+  not calculate alert latency. Their SLA status is **not measured**, not a pass.
+- No production sensor or wall-clock alert latency was tested for any rule.
 
 ## Blast-radius (#9 cross-boundary)
 - Any compromise whose combined reach across #6-8 exceeds the declared bound? no (hf_worker identity combined min-cut capacity across imds/k8s_api/tailscale_vpn is strictly 0).
@@ -59,3 +65,13 @@ Measurement outputs required by the brief. Numbers come from `validation/`.
   hardening note rather than leaving them invisible under one collapsed `allowed` flag.
 - Verified by `pytest tests/test_check_{egress,imds,controlplane}.py` (27 tests, offline, <1s),
   plus new adversarial/exploit-lab fixtures for these three boundaries (previously absent).
+
+## Rules 1/3/8 deepened (security lane)
+- Rule 1 validates 64-hex SHA-256 pins, confines artifact paths to the sealed mirror, and hashes the
+  actual offline artifact bytes; a truthy or well-shaped manifest alone cannot pass.
+- Rule 3 requires privileged mode and privilege escalation disabled, a read-only root filesystem,
+  `drop: ALL`, no added capabilities, a confined seccomp profile, a non-root UID, and no egress.
+- Rule 8 recursively inspects bounded base64/gzip layers, requires an ephemeral key policy of no
+  more than 24 hours, reconstructs the four-event intrusion sequence for one workload, and computes
+  VPN-start alert latency instead of trusting a `sequence_matched` boolean.
+- Verified by `pytest tests/test_check_{registry,sandbox,tailscale}.py` (25 tests, offline, <1s).

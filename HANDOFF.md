@@ -42,7 +42,7 @@ Verify anytime (offline, no keys):
 - **Headline number** computed in `analysis/threshold_model.ipynb`: quarantine at a per-identity action-rate
   threshold fires **41.6 h before the Day-3 spike** (band: 500->44.8h, 1000->41.6h, 2000->35.3h).
 - **Figure:** `report/figures/trust_boundaries.png` (+ reproducible generator).
-- **Status:** fixed 9/9, broken/exploit/adversarial 0/9, replay 13/13, `pytest tests/` 64/64 passing.
+- **Status:** fixed 9/9, broken/exploit/adversarial 0/9, replay 13/13, `pytest tests/` 76/76 passing.
 - **Note on biscuit:** the `biscuit-python` Rust binding won't build on modern Python, so rule 9's off-origin
   replay result is modeled declaratively via `credential_scope.yaml` rather than a live mint/verify - key for a
   judge-runnable artifact with no extra native deps.
@@ -67,20 +67,20 @@ does two-layer (NetworkPolicy + RBAC) graph reachability. Still worth your AWS d
   skim [3] arXiv:2606.08433 for how a property->test->result table reads.
 
 =====================================================================
-## TODO (Junyi) - rules 1, 3, 8  (security lane)
+## DONE (Junyi) - rules 1, 3, 8  (security lane)
 
-These are no longer placeholders (see "DONE" above - Somay fixed the path-mismatch bug and deepened all three
-to match `control_spec.yaml`), but there's still real depth to add:
-- **Rule 8 (Tailscale + detection):** the decoder-aware matcher now handles base64 (optionally gzip-wrapped)
-  tokens; extend it to the full documented sequence (env dump -> staged binary -> IMDS -> VPN start), not just
-  the VPN-start step, if you want to go further than the current per-event check.
-- **Rule 3 (sandbox):** deepen the security-context checks (gVisor/seccomp specifics) if you want.
-- **Rule 1 (registry):** now reads the real `b1_registry/mirror_manifest.yaml` and checks sha256 pins; extend to
-  actually verify a pin against a fetched artifact if you want an even stronger claim (currently structural only).
-- Stay fixed 9/9 + adversarial 0/9. Commit your files.
-- **You also own:** the threat-model section + the required **Limitations & Dual-Use appendix**.
-- **Papers for your rules:** [2] arXiv:2604.23425 ("the agent is the adversary" - grounds your threat model);
-  [1] arXiv:2607.25379 (classes "persistent C2" + "multi-step chains" = your 8/3 area).
+- **Rule 1 (registry):** validates 64-hex pins, confines artifact paths to the sealed mirror, requires each local
+  artifact, and hashes its bytes. The fixed lab carries two deterministic offline artifact fixtures.
+- **Rule 3 (sandbox):** strictly rejects privileged mode, privilege escalation, writable root filesystems,
+  missing `drop: ALL`, root UID variants, added capabilities, unconfined seccomp, and egress.
+- **Rule 8 (Tailscale + detection):** bounded recursive base64/gzip decoding catches nested keys; policy requires
+  ephemeral expiry <=24h; JSONL evidence is independently correlated across env dump -> staged binary -> IMDS ->
+  VPN start for one workload, with VPN alert latency calculated against the <1 minute SLA.
+- **Threat model + Limitations & Dual-Use:** the report now states attacker capabilities, defender-controlled
+  evidence, the bounded security claim, compositional containment, and the remaining mock/runtime limitations.
+- Verified: fixed 9/9; broken/exploit/adversarial 0/9; replay 13/13; focused security tests 25/25; full suite 76/76.
+- **Papers for these rules:** [2] arXiv:2604.23425 ("the agent is the adversary" - threat model);
+  [1] arXiv:2607.25379 (classes "persistent C2" + "multi-step chains" = rules 8/3).
 
 =====================================================================
 ## OPEN (whole team)
@@ -94,6 +94,9 @@ to match `control_spec.yaml`), but there's still real depth to add:
   Create Key -> `sk-ant-...`), copy `.env.example` to `.env`, paste it as `ANTHROPIC_API_KEY`, use model
   `claude-sonnet-5`. `.env` is gitignored - never commit a real key. (Our AgentRouter/Codex proxy won't work -
   it's UA-gated to the Codex CLI.) Full steps are in `.env.example`.
+- **Reporting guardrail:** adaptive trials are N=0 and must remain labeled unmeasured until the
+  runner is implemented and executed. Only rule 8 has fixture-timestamp SLA evidence (24s); rules
+  1-7 and 9 have declared SLA targets but no measured alert latency.
 
 ---
 ## LOG
@@ -108,4 +111,8 @@ to match `control_spec.yaml`), but there's still real depth to add:
    failing / 48 passing before this fix (mismatched paths + a `context` kwarg TypeError in rule 9); now 64/64
    passing. Scorecards unchanged in outcome (fixed 9/9, others 0/9) but now for the right reasons.
    NEXT: Vikas/Junyi review + commit their lanes; report prose.
+## 2026-09-12 (Junyi, security hardening) - GREEN: rules 1/3/8 now verify artifact bytes, complete sandbox
+   privilege fields, nested decoder evasion, correlated event order, key expiry, and detection SLA. Added an
+   explicit threat model and limitations. Verified fixed 9/9, three attack labs 0/9, replay 13/13, tests 76/76.
+   NEXT: review and commit this local security-lane diff; no pull request created.
 ## <date> (<name>) - GREEN: / BROKEN: / NEXT:

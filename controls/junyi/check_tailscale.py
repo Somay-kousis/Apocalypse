@@ -15,8 +15,10 @@ so an attacker can't dodge the authkey scan just by encoding the value.
 """
 import base64
 import gzip
+import io
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from controls.base import CheckResult
 
@@ -28,26 +30,43 @@ LOG_FILE = "alert_log.jsonl"
 # "REUSABLE" markers appear in this repo's fixtures; a real key has no such
 # marker, so the regex alone (not the marker) is what actually matters.
 _AUTHKEY_RE = re.compile(r"tskey-auth-[a-zA-Z0-9_-]+")
-_B64_TOKEN_RE = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
+_B64_TOKEN_RE = re.compile(r"[A-Za-z0-9+/]{16,16384}={0,2}")
+_ENV_SETTING_RE = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
+MAX_KEY_HOURS = 24
+MAX_DECODE_DEPTH = 4
+MAX_DECODED_BYTES = 64 * 1024
+REQUIRED_SEQUENCE = ("env_dump", "binary_stage", "imds_access", "vpn_binary_start")
 
 
 def _decode_candidates(text: str):
     """Yield the raw text plus any base64 (optionally gzip-wrapped) substrings
     decoded, so an obfuscated authkey still gets caught."""
-    yield text
-    for tok in _B64_TOKEN_RE.findall(text):
-        try:
-            raw = base64.b64decode(tok, validate=True)
-        except Exception:
+    queue = [(text, 0)]
+    seen = {text}
+    while queue:
+        candidate, depth = queue.pop(0)
+        yield candidate
+        if depth >= MAX_DECODE_DEPTH:
             continue
-        try:
-            raw = gzip.decompress(raw)
-        except Exception:
-            pass  # not gzip - try the raw decoded bytes as-is
-        try:
-            yield raw.decode("utf-8", errors="ignore")
-        except Exception:
-            continue
+        for tok in _B64_TOKEN_RE.findall(candidate):
+            try:
+                raw = base64.b64decode(tok, validate=True)
+            except Exception:
+                continue
+            if len(raw) > MAX_DECODED_BYTES:
+                continue
+            if raw.startswith(b"\x1f\x8b"):
+                try:
+                    with gzip.GzipFile(fileobj=io.BytesIO(raw)) as gz:
+                        raw = gz.read(MAX_DECODED_BYTES + 1)
+                except (OSError, EOFError):
+                    continue
+                if len(raw) > MAX_DECODED_BYTES:
+                    continue
+            decoded = raw.decode("utf-8", errors="ignore")
+            if decoded and decoded not in seen:
+                seen.add(decoded)
+                queue.append((decoded, depth + 1))
 
 
 def _find_reusable_authkey(text: str):
@@ -56,6 +75,82 @@ def _find_reusable_authkey(text: str):
         if m:
             return m.group(0), candidate != text
     return None, False
+
+
+def _env_settings(text: str):
+    settings = {}
+    for line in text.splitlines():
+        match = _ENV_SETTING_RE.match(line.strip())
+        if match:
+            settings[match.group(1)] = match.group(2).strip()
+    return settings
+
+
+def _parse_time(value):
+    if not isinstance(value, str):
+        raise ValueError("timestamp is missing")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("timestamp must include a UTC offset")
+    return parsed
+
+
+def _validate_detection_sequence(events):
+    """Independently reconstruct the attack sequence for one workload.
+
+    The final event's `sequence_matched` claim is deliberately ignored.  The
+    checker derives correlation and order from the individual evidence rows.
+    """
+    by_workload = {}
+    for event in events:
+        workload = event.get("workload_id")
+        if not isinstance(workload, str) or not workload:
+            continue
+        by_workload.setdefault(workload, []).append(event)
+
+    errors = []
+    for workload, workload_events in by_workload.items():
+        selected = []
+        cursor = 0
+        for event in workload_events:
+            if cursor >= len(REQUIRED_SEQUENCE):
+                break
+            if event.get("event") != REQUIRED_SEQUENCE[cursor]:
+                continue
+            if event.get("detected") is not True:
+                errors.append(f"{event.get('event')} for {workload} was not detected")
+                break
+            try:
+                occurred = _parse_time(event.get("occurred_at"))
+                alerted = _parse_time(event.get("alerted_at"))
+            except (TypeError, ValueError) as exc:
+                errors.append(f"invalid detection timestamp for {workload}: {exc}")
+                break
+            if alerted < occurred:
+                errors.append(f"alert precedes event for {workload}")
+                break
+            selected.append((event, occurred, alerted))
+            cursor += 1
+
+        if cursor != len(REQUIRED_SEQUENCE):
+            continue
+        occurred_times = [occurred for _, occurred, _ in selected]
+        if occurred_times != sorted(occurred_times):
+            errors.append(f"attack sequence is out of order for {workload}")
+            continue
+        vpn_event, vpn_occurred, vpn_alerted = selected[-1]
+        latency = (vpn_alerted - vpn_occurred).total_seconds()
+        if latency > 60:
+            errors.append(f"vpn startup alert missed <1 min SLA for {workload}: {latency:.0f}s")
+            continue
+        return True, []
+
+    if not errors:
+        errors.append(
+            "no single workload has the detected sequence "
+            + " -> ".join(REQUIRED_SEQUENCE)
+        )
+    return False, errors
 
 
 def run(target_dir: str) -> CheckResult:
@@ -67,32 +162,46 @@ def run(target_dir: str) -> CheckResult:
                             "worker env / detection evidence unverified")
 
     problems = []
-    key_hit, was_decoded = _find_reusable_authkey(env_path.read_text())
+    env_text = env_path.read_text()
+    key_hit, was_decoded = _find_reusable_authkey(env_text)
     if key_hit:
         how = "decoder-obfuscated (base64/gzip)" if was_decoded else "plaintext"
-        problems.append(f"reusable authkey found in worker env ({how}): {key_hit}")
+        problems.append(f"Tailscale authkey found in worker env ({how}): {key_hit}")
+
+    settings = _env_settings(env_text)
+    if settings.get("TS_AUTHKEY_MODE") != "ephemeral":
+        problems.append("TS_AUTHKEY_MODE must be ephemeral")
+    try:
+        expiration_hours = int(settings.get("TS_AUTHKEY_EXPIRATION_HOURS", ""))
+    except ValueError:
+        expiration_hours = None
+    if expiration_hours is None or not (0 < expiration_hours <= MAX_KEY_HOURS):
+        problems.append(
+            f"TS_AUTHKEY_EXPIRATION_HOURS must be an integer from 1 to {MAX_KEY_HOURS}"
+        )
 
     log_lines = [l for l in log_path.read_text().splitlines() if l.strip()]
     events = []
-    for line in log_lines:
+    for line_number, line in enumerate(log_lines, 1):
         try:
-            events.append(json.loads(line))
+            event = json.loads(line)
         except json.JSONDecodeError:
+            problems.append(f"alert log line {line_number} is not valid JSON")
             continue
+        if not isinstance(event, dict):
+            problems.append(f"alert log line {line_number} is not a JSON object")
+            continue
+        events.append(event)
 
-    detected = any(
-        e.get("event") == "vpn_binary_start" and e.get("detected") is True and e.get("sequence_matched") is True
-        for e in events
-    )
+    detected, sequence_errors = _validate_detection_sequence(events)
     if not detected:
-        problems.append("no vpn_binary_start event with detected+sequence_matched in alert log "
-                         "(startup not proven to be caught)")
+        problems.extend(sequence_errors)
 
     if problems:
         return CheckResult(8, "No reusable VPN keys", "FAIL",
                             "; ".join(problems), evidence=[str(env_path), str(log_path)])
 
     return CheckResult(8, "No reusable VPN keys", "PASS",
-                        "no reusable authkey in worker env (plaintext or decoded); "
-                        "VPN startup detected with sequence match.",
+                        "no authkey in worker env (plaintext or decoded); ephemeral key policy <=24h; "
+                        "full attack sequence correlated and VPN startup alerted within 1 minute.",
                         evidence=[str(env_path), str(log_path)])

@@ -1,3 +1,5 @@
 # Broken: reusable Tailscale authkey sitting in worker env
 TS_AUTHKEY=tskey-auth-k7XyZ9-REUSABLE0000000000000000
+TS_AUTHKEY_MODE=reusable
+TS_AUTHKEY_EXPIRATION_HOURS=876000
 PATH=/usr/bin:/bin

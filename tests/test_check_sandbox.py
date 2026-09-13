@@ -4,6 +4,8 @@ from tests.conftest import write
 
 HARDENED = {
     "runAsNonRoot": True, "runAsUser": 10001,
+    "privileged": False, "allowPrivilegeEscalation": False,
+    "readOnlyRootFilesystem": True,
     "capabilities": {"add": [], "drop": ["ALL"]},
     "seccompProfile": {"type": "RuntimeDefault"},
     "allowEgress": False,
@@ -38,6 +40,38 @@ def test_fail_when_seccomp_unconfined(tmp_path):
     write(tmp_path, "b3_sandbox", "security_context.yaml", yaml.dump(ctx))
     res = check_sandbox.run(str(tmp_path))
     assert res.status == "FAIL"
+
+
+def test_fail_when_privileged_even_with_nonroot_claim(tmp_path):
+    ctx = {**HARDENED, "privileged": True}
+    write(tmp_path, "b3_sandbox", "security_context.yaml", yaml.safe_dump(ctx))
+    res = check_sandbox.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "privileged" in res.detail
+
+
+def test_fail_when_privilege_escalation_allowed(tmp_path):
+    ctx = {**HARDENED, "allowPrivilegeEscalation": True}
+    write(tmp_path, "b3_sandbox", "security_context.yaml", yaml.safe_dump(ctx))
+    res = check_sandbox.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "allowPrivilegeEscalation" in res.detail
+
+
+def test_fail_when_root_filesystem_is_writable(tmp_path):
+    ctx = {**HARDENED, "readOnlyRootFilesystem": False}
+    write(tmp_path, "b3_sandbox", "security_context.yaml", yaml.safe_dump(ctx))
+    res = check_sandbox.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "readOnlyRootFilesystem" in res.detail
+
+
+def test_fail_when_all_capabilities_are_not_dropped(tmp_path):
+    ctx = {**HARDENED, "capabilities": {"add": [], "drop": ["NET_RAW"]}}
+    write(tmp_path, "b3_sandbox", "security_context.yaml", yaml.safe_dump(ctx))
+    res = check_sandbox.run(str(tmp_path))
+    assert res.status == "FAIL"
+    assert "drop must include ALL" in res.detail
 
 
 def test_fail_when_missing_file(tmp_path):

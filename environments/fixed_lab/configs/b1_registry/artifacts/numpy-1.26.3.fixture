@@ -1,0 +1,2 @@
+Offline sealed-mirror fixture for numpy 1.26.3.
+This small deterministic payload stands in for a wheel during checker validation.

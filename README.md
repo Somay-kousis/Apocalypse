@@ -43,7 +43,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m validation.run_checks    --target environments/fixed_lab/configs    # 9/9
 .venv/bin/python -m validation.run_checks    --target environments/broken_lab/configs   # 0/9
 .venv/bin/python -m validation.replay_attack --target environments/fixed_lab/configs    # 13/13 blocked
-.venv/bin/python -m pytest tests/ -q                                                    # 10 passed
+.venv/bin/python -m pytest tests/ -q                                                    # 76 passed
 ```
 
 ## Owners

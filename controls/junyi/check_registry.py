@@ -7,12 +7,23 @@ config_file for this rule - NOT a root-level registry.json (that was a stale
 legacy path that never matched the declared spec or the b1_registry fixtures
 red-teamed in exploit_lab/adversarial_lab).
 """
+import hashlib
+import re
 from pathlib import Path
 import yaml
 from controls.base import CheckResult
 
 BOUNDARY_DIR = "b1_registry"
 CONFIG_FILE = "mirror_manifest.yaml"
+SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as artifact:
+        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def run(target_dir: str) -> CheckResult:
@@ -37,13 +48,44 @@ def run(target_dir: str) -> CheckResult:
     packages = manifest.get("packages") or []
     if not packages:
         problems.append("no packages declared (fail-closed: an empty manifest can't be verified)")
-    missing_hash = [p.get("name", "<unnamed>") for p in packages if not p.get("sha256")]
-    if missing_hash:
-        problems.append(f"package(s) missing sha256 pin: {', '.join(missing_hash)}")
+
+    boundary_root = cfg.parent.resolve()
+    for package in packages:
+        if not isinstance(package, dict):
+            problems.append(f"invalid package entry: {package!r}")
+            continue
+
+        name = package.get("name", "<unnamed>")
+        expected = package.get("sha256")
+        if not isinstance(expected, str) or not SHA256_RE.fullmatch(expected):
+            problems.append(f"package {name} has no valid 64-hex sha256 pin")
+            continue
+
+        artifact_rel = package.get("artifact")
+        if not isinstance(artifact_rel, str) or not artifact_rel.strip():
+            problems.append(f"package {name} has no local artifact to verify")
+            continue
+
+        artifact_path = (boundary_root / artifact_rel).resolve()
+        try:
+            artifact_path.relative_to(boundary_root)
+        except ValueError:
+            problems.append(f"package {name} artifact escapes the sealed mirror directory")
+            continue
+        if not artifact_path.is_file():
+            problems.append(f"package {name} artifact is missing: {artifact_rel}")
+            continue
+
+        actual = _sha256(artifact_path)
+        if actual.lower() != expected.lower():
+            problems.append(
+                f"package {name} sha256 mismatch: expected {expected.lower()}, got {actual}"
+            )
 
     if problems:
         return CheckResult(1, "Package registry seal", "FAIL",
                             "; ".join(problems), evidence=[str(cfg)])
 
     return CheckResult(1, "Package registry seal", "PASS",
-                        "Hash-attested mirror isolated from shared infra.", evidence=[str(cfg)])
+                        "Every local artifact matches its sha256 pin; mirror is sealed and isolated from shared infra.",
+                        evidence=[str(cfg)])

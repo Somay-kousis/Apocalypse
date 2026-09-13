@@ -5,7 +5,9 @@ route_to_shared_registry: false
 packages:
   - name: numpy
     version: 1.26.3
-    sha256: b1e2c3d4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2
+    artifact: artifacts/numpy-1.26.3.fixture
+    sha256: 647a67c998ae0149e3ffa0b85759b00a1c5c4060d03a9ed1f256e04bce19a7e0
   - name: pyyaml
     version: 6.0.1
-    sha256: a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1
+    artifact: artifacts/pyyaml-6.0.1.fixture
+    sha256: ebe2ac849919e256f8ab01f996226b75f18ede197618cfe7ef53c1d84ae7352b

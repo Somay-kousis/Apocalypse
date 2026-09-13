@@ -37,8 +37,8 @@ controls:
     owner: Junyi
     boundary: "Zero-day in shared package registry"
     requirement: "Sealed, read-only mirrors with no shared-infra access."
-    pass_condition: "Mirror manifest is hash-attested and eval namespace has no route to shared registry infra."
-    verification: "Hash-attested mirror manifest audit."
+    pass_condition: "Mirror manifest is hash-attested, has no route to shared registry infra, and every declared artifact matches a valid 64-hex SHA-256 pin."
+    verification: "Offline mirror-manifest audit plus byte-for-byte SHA-256 verification of each local artifact."
     detection_sla: "Mirror-hash mismatch alerts at pull time (<1 min)."   # DRAFT
     adoption_cost: "Medium - requires per-eval sealed mirror infra."       # DRAFT
     check_module: controls.junyi.check_registry:run
@@ -68,8 +68,8 @@ controls:
     name: Rootless code execution
     owner: Junyi
     boundary: "Arbitrary C code execution as root"
-    requirement: "Non-root, no added capabilities, no egress."
-    pass_condition: "runAsNonRoot true; no added caps (no CAP_NET_RAW/SYS_ADMIN); egress off; seccomp profile set."
+    requirement: "Non-root, no privilege escalation, no capabilities, a read-only root filesystem, confined seccomp, and no egress."
+    pass_condition: "runAsNonRoot true; privileged and allowPrivilegeEscalation false; readOnlyRootFilesystem true; no added caps and ALL dropped; egress off; seccomp RuntimeDefault or Localhost."
     verification: "Container security-context audit."
     detection_sla: "Privileged-syscall / seccomp violation alert (<1 min)." # DRAFT
     adoption_cost: "Low - security-context fields."                          # DRAFT
@@ -148,9 +148,9 @@ controls:
     name: No reusable VPN keys + startup detection
     owner: Junyi
     boundary: "Unauthorized Tailscale startup"
-    requirement: "No reusable keys in worker env; startup detected."
-    pass_condition: "No reusable auth keys in worker env; VPN-client startup + decoder-obfuscated payloads detected."
-    verification: "Secret-scanning + alert-log schema check. (Decoder-aware matcher: unpack base64/gzip, then match sequence.)"
+    requirement: "No auth keys in worker env; ephemeral key policy expires within 24 hours; the full intrusion sequence and VPN startup are detected."
+    pass_condition: "No plaintext or nested base64/gzip auth key in worker env; key policy is ephemeral and <=24h; one workload's env-dump -> binary-stage -> IMDS -> VPN-start events are ordered, detected, and VPN alert latency is <=60s."
+    verification: "Bounded recursive secret decoding plus independent JSONL event correlation and alert-latency calculation."
     detection_sla: "VPN-binary startup / authkey use alert (<1 min)."     # DRAFT
     adoption_cost: "Low-medium - secret scan + detection rule."           # DRAFT
     check_module: controls.junyi.check_tailscale:run

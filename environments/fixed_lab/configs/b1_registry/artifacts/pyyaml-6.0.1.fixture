@@ -1,0 +1,2 @@
+Offline sealed-mirror fixture for PyYAML 6.0.1.
+This small deterministic payload stands in for a wheel during checker validation.

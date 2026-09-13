@@ -36,10 +36,26 @@ def run(target_dir: str) -> CheckResult:
     if "runAsUser" in ctx and _is_root(ctx["runAsUser"]):
         problems.append(f"runAsUser resolves to root: {ctx['runAsUser']!r}")
 
+    if ctx.get("privileged") is not False:
+        problems.append(f"privileged must be boolean false (got {ctx.get('privileged')!r})")
+    if ctx.get("allowPrivilegeEscalation") is not False:
+        problems.append(
+            "allowPrivilegeEscalation must be boolean false "
+            f"(got {ctx.get('allowPrivilegeEscalation')!r})"
+        )
+    if ctx.get("readOnlyRootFilesystem") is not True:
+        problems.append(
+            "readOnlyRootFilesystem must be boolean true "
+            f"(got {ctx.get('readOnlyRootFilesystem')!r})"
+        )
+
     caps = ctx.get("capabilities") or {}
     added = caps.get("add") or []
     if added:  # spec: NO added capabilities (a denylist always misses one)
         problems.append(f"no added capabilities allowed; found {added}")
+    dropped = {str(cap).upper() for cap in (caps.get("drop") or [])}
+    if "ALL" not in dropped:
+        problems.append("capabilities.drop must include ALL")
 
     seccomp_type = (ctx.get("seccompProfile") or {}).get("type")
     if seccomp_type not in SAFE_SECCOMP:
@@ -53,4 +69,5 @@ def run(target_dir: str) -> CheckResult:
                             "; ".join(problems), evidence=[str(cfg)])
 
     return CheckResult(3, "Rootless code execution", "PASS",
-                        "non-root, no added caps, seccomp confined, egress off.", evidence=[str(cfg)])
+                        "non-root, no privilege escalation, read-only rootfs, all caps dropped, seccomp confined, egress off.",
+                        evidence=[str(cfg)])

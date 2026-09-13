@@ -46,6 +46,28 @@ crossings and cites the specific command in the public record that exercised it 
 `cat .../serviceaccount/token`, `curl 169.254.169.254`, and `curl -k https://kubernetes.default.svc/api`
 on Day 3.
 
+## Threat Model and Security Claim
+We assume the evaluated agent can execute arbitrary submitted code, inspect its own process and
+filesystem, supply malicious datasets and configuration, encode payloads to evade plain-text
+matching, and reuse any credential or network key exposed to its worker. It may chain these actions
+across package, sandbox, data-loader, cloud, cluster, VPN, and identity boundaries. We do not assume
+that a compromised worker, package proxy, or credential will continue to enforce policy correctly;
+the next independent boundary must contain it.
+
+The defender controls the pre-deployment artifacts audited here: sealed-mirror contents and
+manifest, container security context, loader policy, network and metadata policy, RBAC/IAM graphs,
+worker environment, and alert log. The security claim is deliberately bounded: the suite proves
+that these supplied artifacts satisfy nine containment invariants and that the fixed reference lab
+blocks every public boundary-testing step. It does not prove that a production cluster matches the
+supplied artifacts at runtime, that an unknown attack cannot use a tenth boundary, or that the
+public incident record is complete.
+
+Containment is therefore compositional. Rule 1 limits a registry compromise; rules 2 and 3 limit
+network and execution reach; rules 4 and 5 keep hostile data from becoming worker code; rules 6
+through 8 restrict cloud, cluster, and VPN pivots; and rule 9 limits the value of anything still
+stolen. Success means one failed boundary does not give the attacker the combined reach needed to
+complete the chain.
+
 ## The 9-Rule Containment Standard
 Each rule in `controls/control_spec.yaml` carries five fields: a plain-language requirement, a
 machine-checkable pass condition, how a third party verifies it without lab access, a detection SLA,
@@ -99,12 +121,15 @@ score 0/9. Two rounds of self-directed red-teaming found and fixed 15 false-nega
 documented with root cause and fix in `RED_TEAM.md`.
 
 ## Limitations & Dual-Use Appendix
-**Verification is at the config-audit level, not a live cluster.** Our checkers read declared
+**Verification is mostly at the config-audit level, not a live cluster.** Our checkers read declared
 YAML/JSON state - pod specs, RBAC graphs, egress policy, credential manifests - the same surface a
 real static-admission controller would audit. They do not attach to a running cluster or observe
 live traffic, so a deployment that declares a hardened config but silently drifts from it at runtime
 (config skew) would still show as compliant here; a production version needs the runtime probe we
-list as a stretch goal. Rules 4, 5, and 9 partially address this by executing the actual exploit
+list as a stretch goal. Rule 1 now hashes the supplied offline artifacts instead of trusting the
+manifest's hash strings, but those small fixtures are not packages fetched from a live registry.
+Rule 8 reconstructs event order and alert latency from JSONL evidence instead of trusting a
+`sequence_matched` flag, but it cannot prove the sensor emitted every real event. Rules 4, 5, and 9 partially address this by executing the actual exploit
 primitive against a reference implementation of the relevant component, but that reference
 implementation is still ours, not the target system's real loader/renderer/credential broker.
 

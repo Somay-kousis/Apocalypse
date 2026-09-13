@@ -1,3 +1,4 @@
 # Adversarial: worker env itself is clean...
 PATH=/usr/bin:/bin
 TS_AUTHKEY_MODE=ephemeral
+TS_AUTHKEY_EXPIRATION_HOURS=876000

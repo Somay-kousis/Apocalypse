@@ -1,6 +1,9 @@
 # Hardened: non-root, no added caps, seccomp enforced, no egress
 runAsNonRoot: true
 runAsUser: 10001
+privileged: false
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
 capabilities:
   add: []
   drop: [ALL]
