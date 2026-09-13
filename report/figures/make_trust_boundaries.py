@@ -12,7 +12,6 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REC = json.loads((ROOT / "analysis/data/incident_public_record.json").read_text())
 
-# --- fixed positions: left-to-right by attack stage; stage 6 branches ---
 POS = {
     "eval_sandbox":  (0,  0.0, "Evaluation\nsandbox"),
     "pkg_registry":  (1,  0.0, "Package\nregistry proxy"),
@@ -23,7 +22,6 @@ POS = {
     "hf_k8s":        (6,  1.15, "K8s control\nplane / IMDS"),
     "hf_internal":   (6, -1.15, "Internal net\n(Tailscale)"),
 }
-# --- zones as background bands over contiguous stage ranges ---
 ZONES = [
     ("OpenAI platform",   -0.55, 1.55, "0.90"),
     ("Public internet",    1.55, 2.55, "0.85"),
@@ -31,12 +29,11 @@ ZONES = [
     ("HF perimeter",       3.55, 4.55, "0.85"),
     ("HF internal",        4.55, 6.75, "0.90"),
 ]
-NW, NH = 0.62, 0.52  # node half-extents
+NW, NH = 0.62, 0.52
 
 fig, ax = plt.subplots(figsize=(15, 8.5))
 ax.set_xlim(-0.9, 7.6); ax.set_ylim(-2.6, 2.2); ax.axis("off")
 
-# zone bands + labels
 for name, x0, x1, shade in ZONES:
     ax.add_patch(plt.Rectangle((x0, -2.55), x1 - x0, 4.7, facecolor=shade, edgecolor="0.75",
                                linewidth=1.0, linestyle="--", zorder=0))
@@ -45,7 +42,6 @@ for name, x0, x1, shade in ZONES:
 
 def center(nid): return POS[nid][0], POS[nid][1]
 
-# nodes
 for nid, (x, y, label) in POS.items():
     ax.add_patch(FancyBboxPatch((x - NW/2, y - NH/2), NW, NH,
                  boxstyle="round,pad=0.02,rounding_size=0.06",
@@ -61,22 +57,17 @@ def edge(a, b, label, rad=0.0, lx=None, ly=None):
     ax.text(lx, ly, label, ha="center", va="center", fontsize=9, zorder=5,
             bbox=dict(boxstyle="round,pad=0.18", fc="white", ec="0.6", lw=0.8))
 
-# rule -> (via) from the record, so labels stay in sync with the data
 via = {e["rule"]: e["via"] for e in REC["trust_boundaries"]["edges"]}
 def L(n): return f"[Rule {n}]\n{via[n]}"
 
-# main chain (straight, no crossings)
 edge("eval_sandbox", "pkg_registry", L(1))
 edge("pkg_registry", "public_net",   L(2))
 edge("public_net", "party_sandbox",  L(3))
 edge("party_sandbox", "hf_perimeter",L(4))
 edge("hf_perimeter", "hf_worker",    L(5))
-# branch
 edge("hf_worker", "hf_k8s",     L(6), rad=-0.15)
 edge("hf_worker", "hf_internal",L(7), rad=0.15)
-# rule 9 back-edge: curve well below the chain
 edge("hf_worker", "public_net", L(9), rad=-0.55, lx=3.5, ly=-1.45)
-# rule 8 self-loop on internal net
 xi, yi = center("hf_internal")
 ax.add_patch(FancyArrowPatch((xi+NW/2, yi+0.12), (xi+NW/2, yi-0.12),
              connectionstyle="arc3,rad=-1.6", arrowstyle="-|>", mutation_scale=14,
