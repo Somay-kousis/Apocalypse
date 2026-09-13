@@ -1,17 +1,15 @@
-"""Rule 4: dataset loader must refuse HDF5 external raw storage refs.
-NOW EXECUTES: builds a real malicious HDF5 file with an ExternalLink pointing at a secret
-(the incident's envu8.h5 -> /proc/self/environ read), then runs a policy-driven reference
-loader against it. Hardened policy (external links off) must REFUSE and leak nothing;
-a permissive policy follows the link and leaks -> FAIL. Fully offline, temp files cleaned up."""
+"""Rule 4: dataset loader must refuse HDF5 external references of ALL kinds.
+EXECUTES: crafts a malicious HDF5 file that uses BOTH an ExternalLink AND external raw
+storage (H5Pset_external, the incident's actual envu8.h5 -> /proc/self/environ vector),
+then runs a policy-driven reference loader. Hardened policy (external off) must refuse
+every vector and leak nothing; a permissive policy follows them and leaks -> FAIL.
+Fully offline, temp files cleaned up."""
 import tempfile, os
 from pathlib import Path
 import h5py
 from controls.base import CheckResult
 
 DANGEROUS_DRIVERS = {"family", "split", "multi"}
-# Regression guard: a forbidden construct left in the config text (even commented
-# out, or referenced as a "legacy path") means the loader policy can't be trusted
-# even when the allow_external_links flag itself reads as safe.
 FORBIDDEN_CONSTRUCTS = {"h5pset_external", "set_external_storage"}
 
 class ExternalRefRefused(Exception): pass
@@ -25,16 +23,39 @@ def _parse(text: str) -> dict:
             out[k.strip().lower()] = v.strip().lower()
     return out
 
+def _external_vectors(f):
+    """Every external-data vector present: link-to-other-file, external raw storage, or VDS."""
+    hits = []
+    for key in f.keys():
+        link = f.get(key, getlink=True)
+        if isinstance(link, h5py.ExternalLink):
+            hits.append(("external_link", key)); continue
+        try:
+            obj = f[key]
+        except Exception:
+            continue
+        if isinstance(obj, h5py.Dataset):
+            try:
+                if obj.id.get_create_plist().get_external_count() > 0:
+                    hits.append(("external_raw_storage", key)); continue
+            except Exception:
+                pass
+            if getattr(obj, "is_virtual", False):
+                hits.append(("virtual_dataset", key))
+    return hits
+
 def _reference_loader(path, allow_external):
-    """A loader that honors the policy. Returns any bytes it leaked via external refs."""
+    """Honor the policy across all external vectors. Returns bytes leaked if permissive."""
     leaked = []
     with h5py.File(path, "r") as f:
-        for key in f.keys():
-            link = f.get(key, getlink=True)
-            if isinstance(link, h5py.ExternalLink):
-                if not allow_external:
-                    raise ExternalRefRefused(f"external link {key!r} refused by policy")
-                leaked.append(bytes(f[key][()]))   # permissive loader follows -> leak
+        vectors = _external_vectors(f)
+        if vectors and not allow_external:
+            raise ExternalRefRefused(f"external references refused by policy: {vectors}")
+        for _kind, key in vectors:
+            try:
+                leaked.append(bytes(f[key][()]))
+            except Exception:
+                leaked.append(b"<unreadable external ref>")
     return leaked
 
 def run(target_dir: str) -> CheckResult:
@@ -47,36 +68,40 @@ def run(target_dir: str) -> CheckResult:
     allow_external = kv.get("allow_external_links") != "false"
     driver = kv.get("hdf5_driver", "")
 
-    # A forbidden construct anywhere in the file (even in a comment describing a
-    # "legacy path") means the policy can't be trusted, regardless of the flag.
-    lowered = raw.lower()
-    found = [c for c in FORBIDDEN_CONSTRUCTS if c in lowered]
+    found = [c for c in FORBIDDEN_CONSTRUCTS if c in raw.lower()]
     if found:
         return CheckResult(4, "Loader refuses external refs", "FAIL",
                            f"forbidden construct present in loader policy: {', '.join(found)}",
                            evidence=[str(cfg)])
 
     tmp = tempfile.mkdtemp(prefix="rule4_")
-    secret_path, mal_path = os.path.join(tmp, "secret.h5"), os.path.join(tmp, "malicious.h5")
+    secret_h5 = os.path.join(tmp, "secret.h5")
+    secret_raw = os.path.join(tmp, "secret.bin")
+    mal = os.path.join(tmp, "malicious.h5")
     try:
-        with h5py.File(secret_path, "w") as s:
-            s["secret"] = b"AWS_SECRET=leaked-from-/proc/self/environ"
-        with h5py.File(mal_path, "w") as m:
-            m["payload"] = h5py.ExternalLink(secret_path, "secret")  # the attack primitive
+        payload = b"AWS_SECRET=leaked-from-/proc/self/environ"
+        with h5py.File(secret_h5, "w") as s:
+            s["secret"] = payload
+        with open(secret_raw, "wb") as r:
+            r.write(payload)
+        with h5py.File(mal, "w") as m:
+            m["via_link"] = h5py.ExternalLink(secret_h5, "secret")                 # vector 1
+            m.create_dataset("via_raw_storage", shape=(len(payload),), dtype="u1", # vector 2 (incident)
+                             external=[(secret_raw, 0, len(payload))])
         try:
-            leaked = _reference_loader(mal_path, allow_external)
+            leaked = _reference_loader(mal, allow_external)
         except ExternalRefRefused as e:
             if driver in DANGEROUS_DRIVERS:
                 return CheckResult(4, "Loader refuses external refs", "FAIL",
-                                   f"external links refused but hdf5_driver {driver!r} still permits external raw storage",
+                                   f"external refs refused but hdf5_driver {driver!r} still permits external raw storage",
                                    evidence=[str(cfg)])
             return CheckResult(4, "Loader refuses external refs", "PASS",
-                               f"crafted external-link read refused ({e})", evidence=[str(cfg)])
+                               f"all crafted external vectors refused ({e})", evidence=[str(cfg)])
         return CheckResult(4, "Loader refuses external refs", "FAIL",
-                           f"loader followed external link and leaked {len(leaked)} secret(s): {leaked[:1]}",
+                           f"loader followed external refs and leaked {len(leaked)} value(s): {leaked[:1]}",
                            evidence=[str(cfg)])
     finally:
-        for p in (secret_path, mal_path):
+        for p in (secret_h5, secret_raw, mal):
             try: os.remove(p)
             except OSError: pass
         try: os.rmdir(tmp)
