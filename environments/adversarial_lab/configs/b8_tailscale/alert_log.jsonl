@@ -1,1 +1,5 @@
-{"event": "vpn_binary_start", "detected": true, "sequence_matched": false}
+{"event":"env_dump","workload_id":"clean-worker","occurred_at":"2026-07-12T01:00:00Z","alerted_at":"2026-07-12T01:00:05Z","detected":true}
+{"event":"binary_stage","workload_id":"clean-worker","occurred_at":"2026-07-12T01:01:00Z","alerted_at":"2026-07-12T01:01:05Z","detected":true}
+{"event":"imds_access","workload_id":"clean-worker","occurred_at":"2026-07-12T01:02:00Z","alerted_at":"2026-07-12T01:02:05Z","detected":true}
+{"event":"vpn_binary_start","workload_id":"clean-worker","occurred_at":"2026-07-12T01:03:00Z","alerted_at":"2026-07-12T01:03:20Z","detected":true}
+{"event":"vpn_binary_start","workload_id":"attacker-worker-99","occurred_at":"2026-07-12T01:04:00Z","detected":false}

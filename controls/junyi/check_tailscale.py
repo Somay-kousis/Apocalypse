@@ -9,16 +9,21 @@ schema that trusted whatever a worker's own config claimed about itself,
 rather than actually scanning the worker env or the detection log).
 
 Decoder-aware matcher (HANDOFF's rule-8 contribution): a plain substring scan
-of worker_env.txt misses a key that's been base64/gzip-obfuscated. We decode
-any base64 (optionally gzip-wrapped) tokens found in the file before matching,
-so an attacker can't dodge the authkey scan just by encoding the value.
+of worker_env.txt misses an encoded key. We recursively decode bounded standard
+and URL-safe base64, base32, hex, percent-URL encoding, and gzip layers before
+matching. These are the exact supported encodings; arbitrary encryption is not
+claimed. Every workload containing a required attack event must also show a
+complete, detected, ordered, on-time sequence.
 """
 import base64
+import binascii
 import gzip
 import io
 import json
 import re
 from pathlib import Path
+from urllib.parse import unquote_to_bytes
+
 from controls.base import CheckResult
 from validation.sla import calculate_latency_seconds, parse_aware_timestamp
 
@@ -30,7 +35,13 @@ LOG_FILE = "alert_log.jsonl"
 # "REUSABLE" markers appear in this repo's fixtures; a real key has no such
 # marker, so the regex alone (not the marker) is what actually matters.
 _AUTHKEY_RE = re.compile(r"tskey-auth-[a-zA-Z0-9_-]+")
-_B64_TOKEN_RE = re.compile(r"[A-Za-z0-9+/]{16,16384}={0,2}")
+_B64_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{16,131072}={0,2}(?![A-Za-z0-9+/=])")
+_URLSAFE_B64_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{16,131072}={0,2}(?![A-Za-z0-9_=-])"
+)
+_B32_TOKEN_RE = re.compile(r"(?<![A-Z2-7])[A-Z2-7]{16,131072}={0,6}(?![A-Z2-7=])", re.I)
+_HEX_TOKEN_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{32,131072}(?![0-9a-f])", re.I)
+_PERCENT_ESCAPE_RE = re.compile(r"%[0-9a-fA-F]{2}")
 _ENV_SETTING_RE = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
 MAX_KEY_HOURS = 24
 MAX_DECODE_DEPTH = 4
@@ -38,9 +49,27 @@ MAX_DECODED_BYTES = 64 * 1024
 REQUIRED_SEQUENCE = ("env_dump", "binary_stage", "imds_access", "vpn_binary_start")
 
 
+def _decoded_text(raw: bytes):
+    if len(raw) > MAX_DECODED_BYTES:
+        return None
+    if raw.startswith(b"\x1f\x8b"):
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(raw)) as gz:
+                raw = gz.read(MAX_DECODED_BYTES + 1)
+        except (OSError, EOFError):
+            return None
+        if len(raw) > MAX_DECODED_BYTES:
+            return None
+    decoded = raw.decode("utf-8", errors="ignore")
+    return decoded or None
+
+
+def _with_padding(token: str, block_size: int):
+    return token + "=" * (-len(token) % block_size)
+
+
 def _decode_candidates(text: str):
-    """Yield the raw text plus any base64 (optionally gzip-wrapped) substrings
-    decoded, so an obfuscated authkey still gets caught."""
+    """Yield raw text and bounded recursive decodings of supported formats."""
     queue = [(text, 0)]
     seen = {text}
     while queue:
@@ -48,22 +77,40 @@ def _decode_candidates(text: str):
         yield candidate
         if depth >= MAX_DECODE_DEPTH:
             continue
-        for tok in _B64_TOKEN_RE.findall(candidate):
+        decoded_values = []
+        if _PERCENT_ESCAPE_RE.search(candidate):
             try:
-                raw = base64.b64decode(tok, validate=True)
-            except Exception:
+                decoded_values.append(unquote_to_bytes(candidate))
+            except (TypeError, ValueError):
+                pass
+
+        for token in _B64_TOKEN_RE.findall(candidate):
+            try:
+                decoded_values.append(base64.b64decode(_with_padding(token, 4), validate=True))
+            except (binascii.Error, ValueError, TypeError):
+                pass
+        for token in _URLSAFE_B64_TOKEN_RE.findall(candidate):
+            try:
+                decoded_values.append(base64.b64decode(
+                    _with_padding(token, 4), altchars=b"-_", validate=True
+                ))
+            except (binascii.Error, ValueError, TypeError):
+                pass
+        for token in _B32_TOKEN_RE.findall(candidate):
+            try:
+                decoded_values.append(base64.b32decode(_with_padding(token, 8), casefold=True))
+            except (binascii.Error, ValueError, TypeError):
+                pass
+        for token in _HEX_TOKEN_RE.findall(candidate):
+            if len(token) % 2:
                 continue
-            if len(raw) > MAX_DECODED_BYTES:
-                continue
-            if raw.startswith(b"\x1f\x8b"):
-                try:
-                    with gzip.GzipFile(fileobj=io.BytesIO(raw)) as gz:
-                        raw = gz.read(MAX_DECODED_BYTES + 1)
-                except (OSError, EOFError):
-                    continue
-                if len(raw) > MAX_DECODED_BYTES:
-                    continue
-            decoded = raw.decode("utf-8", errors="ignore")
+            try:
+                decoded_values.append(bytes.fromhex(token))
+            except ValueError:
+                pass
+
+        for raw in decoded_values:
+            decoded = _decoded_text(raw)
             if decoded and decoded not in seen:
                 seen.add(decoded)
                 queue.append((decoded, depth + 1))
@@ -87,30 +134,38 @@ def _env_settings(text: str):
 
 
 def _validate_detection_sequence(events):
-    """Independently reconstruct the attack sequence for one workload.
+    """Independently reconstruct the attack sequence for every workload.
 
     The final event's `sequence_matched` claim is deliberately ignored.  The
     checker derives correlation and order from the individual evidence rows.
+    Any workload containing a required event must have the entire sequence;
+    one clean workload cannot mask an undetected attack on another.
     """
     by_workload = {}
-    for event in events:
+    errors = []
+    for index, event in enumerate(events, 1):
+        if event.get("event") not in REQUIRED_SEQUENCE:
+            continue
         workload = event.get("workload_id")
         if not isinstance(workload, str) or not workload:
+            errors.append(f"attack event {index} has no valid workload_id")
             continue
         by_workload.setdefault(workload, []).append(event)
 
-    errors = []
+    if not by_workload:
+        errors.append(
+            "no workload has the complete detected sequence " + " -> ".join(REQUIRED_SEQUENCE)
+        )
+
     for workload, workload_events in by_workload.items():
-        selected = []
-        cursor = 0
+        validated = []
+        workload_failed = False
         for event in workload_events:
-            if cursor >= len(REQUIRED_SEQUENCE):
-                break
-            if event.get("event") != REQUIRED_SEQUENCE[cursor]:
-                continue
+            event_name = event.get("event")
             if event.get("detected") is not True:
-                errors.append(f"{event.get('event')} for {workload} was not detected")
-                break
+                errors.append(f"{event_name} for {workload} was not detected")
+                workload_failed = True
+                continue
             try:
                 occurred = parse_aware_timestamp(event.get("occurred_at"), "occurred_at")
                 latency = calculate_latency_seconds(
@@ -118,28 +173,38 @@ def _validate_detection_sequence(events):
                 )
             except (TypeError, ValueError) as exc:
                 errors.append(f"invalid detection timestamp for {workload}: {exc}")
+                workload_failed = True
+                continue
+            if latency > 60:
+                errors.append(
+                    f"{event_name} alert missed <1 min SLA for {workload}: {latency:.0f}s"
+                )
+                workload_failed = True
+                continue
+            validated.append((event_name, occurred))
+
+        selected_times = []
+        cursor = 0
+        for event_name, occurred in validated:
+            if cursor >= len(REQUIRED_SEQUENCE):
                 break
-            selected.append((event, occurred, latency))
+            if event_name != REQUIRED_SEQUENCE[cursor]:
+                continue
+            selected_times.append(occurred)
             cursor += 1
 
         if cursor != len(REQUIRED_SEQUENCE):
+            errors.append(
+                f"incomplete attack sequence for {workload}: expected "
+                + " -> ".join(REQUIRED_SEQUENCE)
+            )
             continue
-        occurred_times = [occurred for _, occurred, _ in selected]
-        if occurred_times != sorted(occurred_times):
+        if selected_times != sorted(selected_times):
             errors.append(f"attack sequence is out of order for {workload}")
+        if workload_failed:
             continue
-        latency = selected[-1][2]
-        if latency > 60:
-            errors.append(f"vpn startup alert missed <1 min SLA for {workload}: {latency:.0f}s")
-            continue
-        return True, []
 
-    if not errors:
-        errors.append(
-            "no single workload has the detected sequence "
-            + " -> ".join(REQUIRED_SEQUENCE)
-        )
-    return False, errors
+    return not errors, errors
 
 
 def run(target_dir: str) -> CheckResult:
@@ -154,7 +219,7 @@ def run(target_dir: str) -> CheckResult:
     env_text = env_path.read_text()
     key_hit, was_decoded = _find_reusable_authkey(env_text)
     if key_hit:
-        how = "decoder-obfuscated (base64/gzip)" if was_decoded else "plaintext"
+        how = "decoder-obfuscated (base64/base32/hex/URL/gzip)" if was_decoded else "plaintext"
         problems.append(f"Tailscale authkey found in worker env ({how}): {key_hit}")
 
     settings = _env_settings(env_text)
@@ -191,6 +256,7 @@ def run(target_dir: str) -> CheckResult:
                             "; ".join(problems), evidence=[str(env_path), str(log_path)])
 
     return CheckResult(8, "No reusable VPN keys", "PASS",
-                        "no authkey in worker env (plaintext or decoded); ephemeral key policy <=24h; "
-                        "full attack sequence correlated and VPN startup alerted within 1 minute.",
+                        "no authkey in worker env (plaintext or supported bounded decodings); "
+                        "ephemeral key policy <=24h; every observed workload has a complete detected "
+                        "attack sequence with alerts within 1 minute.",
                         evidence=[str(env_path), str(log_path)])

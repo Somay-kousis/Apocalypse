@@ -102,10 +102,11 @@ attack executions; the contained integration tier above remains the action-level
 - Any compromise whose combined reach across #6-8 exceeds the declared bound? no (hf_worker identity combined min-cut capacity across imds/k8s_api/tailscale_vpn is strictly 0).
 
 ## Robustness (red-team, see RED_TEAM.md)
-- 15 false-negative bypasses found and fixed across all 9 rules + the runner (10 from round 1;
+- 17 false-negative bypasses found and fixed across all 9 rules + the runner (10 from round 1;
   5 more found deepening rules 2/6/7 - domain-fronting, IP-literal, and subdomain-wildcard
   bypasses on egress; hop-limit-without-IMDSv2 and string-type-confusion on IMDS; RBAC/NetworkPolicy
-  layer-collapse on the control-plane graph).
+  layer-collapse on the control-plane graph; 2 more in Rule 8 for additional encodings and
+  multi-workload masking).
 - Suite is fail-closed: a hostile/malformed config fails one rule, never blinds the scorecard.
 - `adversarial_lab` and `exploit_lab` now include fixtures for rules 2/6/7 (previously untested
   there - those checks were auto-failing on "missing config" rather than being red-teamed).
@@ -132,10 +133,13 @@ attack executions; the contained integration tier above remains the action-level
 
 ## Rules 1/3/8 deepened (security lane)
 - Rule 1 validates 64-hex SHA-256 pins, confines artifact paths to the sealed mirror, and hashes the
-  actual offline artifact bytes; a truthy or well-shaped manifest alone cannot pass.
+  actual offline artifact bytes; a truthy or well-shaped manifest alone cannot pass. This is an
+  integrity check relative to the supplied manifest, not publisher authenticity: a compromised
+  mirror could replace both bytes and hashes without an independent signature or transparency log.
 - Rule 3 requires privileged mode and privilege escalation disabled, a read-only root filesystem,
   `drop: ALL`, no added capabilities, a confined seccomp profile, a non-root UID, and no egress.
-- Rule 8 recursively inspects bounded base64/gzip layers, requires an ephemeral key policy of no
-  more than 24 hours, reconstructs the four-event intrusion sequence for one workload, and computes
-  VPN-start alert latency instead of trusting a `sequence_matched` boolean.
-- Verified by `pytest tests/test_check_{registry,sandbox,tailscale}.py` (25 tests, offline, <1s).
+- Rule 8 recursively inspects bounded standard/URL-safe base64, base32, hex, percent-URL, and gzip
+  layers, requires an ephemeral key policy of no more than 24 hours, and audits every workload that
+  emits an attack-sequence event. Each workload must have the complete ordered four-event sequence,
+  with every event detected within 60 seconds; one clean workload cannot mask another.
+- Verified by `pytest tests/test_check_{registry,sandbox,tailscale}.py` (33 tests, offline, <1s).

@@ -1,4 +1,5 @@
-# Adversarial: worker env itself is clean...
+# Adversarial: reusable auth key hidden as hexadecimal.
 PATH=/usr/bin:/bin
 TS_AUTHKEY_MODE=ephemeral
-TS_AUTHKEY_EXPIRATION_HOURS=876000
+TS_AUTHKEY_EXPIRATION_HOURS=12
+ENCODED_BLOB=74736b65792d617574682d6b313233343536373839306162636465666768696a6b6c6d6e6f70717273747576

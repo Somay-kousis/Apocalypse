@@ -19,7 +19,7 @@ lab access can run our test harness on a laptop in seconds and watch the score m
 the real (broken) misconfiguration to 9/9 against our hardened baseline - Track 1's literal
 verifiability bar. We additionally back-test a per-identity action-rate quarantine threshold against
 the public daily counts and find it would have triggered 41.6 hours before the incident's largest
-single-day spike (Day 3, 7,677 actions), and we red-team our own checkers, finding and fixing 15
+single-day spike (Day 3, 7,677 actions), and we red-team our own checkers, finding and fixing 17
 false-negative bypasses across two rounds.
 
 ## The Incident Replay
@@ -116,9 +116,13 @@ band of 44.8h (at 500/day) to 35.3h (at 2,000/day). Of the 14 example commands i
 13 are genuine boundary-testing steps (3 are context-only recon/cleanup evidence, not tests of a
 specific control) and all 13 are blocked by the fixed lab. The fixed lab scores 9/9; the real
 July-2026 misconfiguration, a first-round attacker config, and a second-round adversarial config each
-score 0/9. Two rounds of self-directed red-teaming found and fixed 15 false-negative bypasses total
-(10 in round 1 across the whole suite; 5 more found deepening rules 2, 6, and 7 specifically),
-documented with root cause and fix in `RED_TEAM.md`.
+score 0/9. Self-directed red-teaming found and fixed 17 false-negative bypasses total: 10 in round
+1, 5 more while deepening rules 2, 6, and 7, and 2 more in Rule 8 for additional encodings and
+multi-workload masking. The latest Rule 8 regressions extend bounded recursive secret decoding to
+standard and URL-safe base64, base32, hex, percent-URL encoding, and gzip. They also change sequence
+correlation from ANY-workload to ALL-workload semantics: every workload showing any required attack
+event must have the complete ordered sequence, with every event detected within 60 seconds. All
+findings are documented with root cause and fix in `RED_TEAM.md`.
 
 The offline SLA harness separately evaluates committed attempt/alert evidence for all nine rules.
 The fixed fixture records 9 hits and no misses or unmeasured rules; broken attempts are undetected,
@@ -155,10 +159,14 @@ real static-admission controller would audit. They do not attach to a running cl
 live traffic, so a deployment that declares a hardened config but silently drifts from it at runtime
 (config skew) would still show as compliant here; a production version needs the runtime probe we
 list as a stretch goal. Rule 1 now hashes the supplied offline artifacts instead of trusting the
-manifest's hash strings, but those small fixtures are not packages fetched from a live registry.
-Rule 8 reconstructs event order and alert latency from JSONL evidence instead of trusting a
-`sequence_matched` flag, but it cannot prove the sensor emitted every real event. The contained
-integration tier executes the core local primitive for Rules 1, 4, 5, and 9, but those reference
+manifest's hash strings, but this establishes only integrity relative to that supplied manifest.
+Because the audit has no independent publisher signature, transparency log, or separately trusted
+hash, an attacker who controls both mirror bytes and manifest hashes can still create a
+self-consistent poisoned mirror. Rule 8 reconstructs event order and alert latency from JSONL
+evidence instead of trusting a `sequence_matched` flag, but it cannot prove the sensor emitted every
+real event. Its decoder claim is also intentionally finite: standard/URL-safe base64, base32, hex,
+percent-URL, and gzip within the documented recursion/output bounds, not arbitrary encryption. The
+contained integration tier executes the core local primitive for Rules 1, 4, 5, and 9, but those reference
 implementations are still ours, not the target system's real registry, loader, renderer, or
 credential broker.
 
