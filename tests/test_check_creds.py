@@ -4,74 +4,80 @@ from controls.somay import check_creds
 from controls.base import CheckResult
 from tests.conftest import write
 
+# scope now must bind pod (origin) + job (purpose) so the live replay audit can run
+SCOPE_OK = {"token_type": "biscuit-attenuated",
+            "scope": {"dataset": "ds", "job": "job-1", "pod": "pod-1"},
+            "off_origin_replay_blocked": True}
+SCOPE_NOT_BISCUIT = {"token_type": "raw",
+                     "scope": {"dataset": "ds", "job": "job-1", "pod": "pod-1"}}
 GRAPH_BOUND_1_REACH_ALL = {
     "declared_blast_radius_bound": 1,
     "identities": [{"name": "worker-sa", "reach": ["imds", "control-plane", "vpn-pivot"]}],
 }
-SCOPE_BLOCKED = {"token_type": "biscuit-attenuated", "off_origin_replay_blocked": True}
-SCOPE_NOT_BLOCKED = {"token_type": "raw", "off_origin_replay_blocked": False}
 
 
-def _passing(rule_id):
-    return CheckResult(rule_id, "n/a", "PASS", "ok")
-
-
-def _failing(rule_id):
-    return CheckResult(rule_id, "n/a", "FAIL", "open")
+def _passing(rid): return CheckResult(rid, "n/a", "PASS", "ok")
+def _failing(rid): return CheckResult(rid, "n/a", "FAIL", "open")
 
 
 def test_pass_when_token_scoped_and_all_upstream_boundaries_pass(tmp_path):
-    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_BLOCKED))
+    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_OK))
     write(tmp_path, "b9_credentials", "iam_graph.json", json.dumps(GRAPH_BOUND_1_REACH_ALL))
     context = {6: _passing(6), 7: _passing(7), 8: _passing(8)}
-    res = check_creds.run(str(tmp_path), context=context)
-    # every reach tag is closed off by an upstream PASS, so effective reach is empty
-    assert res.status == "PASS"
+    assert check_creds.run(str(tmp_path), context=context).status == "PASS"
 
 
-def test_fail_when_token_replay_not_blocked_even_if_graph_is_fine(tmp_path):
-    graph = {"declared_blast_radius_bound": 5, "identities": [{"name": "worker-sa", "reach": []}]}
-    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_NOT_BLOCKED))
+def test_fail_when_token_not_attenuated(tmp_path):
+    graph = {"declared_blast_radius_bound": 5, "identities": [{"name": "w", "reach": []}]}
+    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_NOT_BISCUIT))
     write(tmp_path, "b9_credentials", "iam_graph.json", json.dumps(graph))
     res = check_creds.run(str(tmp_path), context={6: _passing(6), 7: _passing(7), 8: _passing(8)})
     assert res.status == "FAIL"
-    assert "off-origin" in res.detail
+    assert "not an attenuated capability token" in res.detail
+
+
+def test_fail_when_scope_missing_origin(tmp_path):
+    # a config can't skip the replay audit by omitting pod/job
+    write(tmp_path, "b9_credentials", "credential_scope.yaml",
+          yaml.dump({"token_type": "biscuit-attenuated", "off_origin_replay_blocked": True}))
+    write(tmp_path, "b9_credentials", "iam_graph.json",
+          json.dumps({"declared_blast_radius_bound": 0, "identities": []}))
+    res = check_creds.run(str(tmp_path), context={})
+    assert res.status == "FAIL" and "scope must bind pod" in res.detail
 
 
 def test_fail_when_upstream_boundaries_open_pushes_reach_over_bound(tmp_path):
-    """Core cross-boundary case: the IAM graph alone doesn't tell the whole
-    story - a reach tag only drops out if the corresponding rule 6/7/8
-    checker already PASSed. If none of them pass, all 3 tags stay 'open'
-    and blow past a bound of 1."""
-    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_BLOCKED))
+    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_OK))
     write(tmp_path, "b9_credentials", "iam_graph.json", json.dumps(GRAPH_BOUND_1_REACH_ALL))
     context = {6: _failing(6), 7: _failing(7), 8: _failing(8)}
     res = check_creds.run(str(tmp_path), context=context)
-    assert res.status == "FAIL"
-    assert "exceeds declared bound" in res.detail
+    assert res.status == "FAIL" and "exceeds bound" in res.detail
 
 
 def test_fail_when_only_some_upstream_boundaries_pass(tmp_path):
-    """Partial mitigation: rule 6 (imds) passes so that tag drops out, but
-    7 and 8 are still open - 2 open tags still exceeds a bound of 1."""
-    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_BLOCKED))
+    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_OK))
     write(tmp_path, "b9_credentials", "iam_graph.json", json.dumps(GRAPH_BOUND_1_REACH_ALL))
     context = {6: _passing(6), 7: _failing(7), 8: _failing(8)}
     res = check_creds.run(str(tmp_path), context=context)
     assert res.status == "FAIL"
     assert "control-plane" in res.detail and "vpn-pivot" in res.detail
-    assert "imds" not in res.detail  # closed off by rule 6's PASS
+    assert "imds" not in res.detail
+
+
+def test_attacker_declared_bound_is_capped(tmp_path):
+    # declaring a huge bound must not let wide reach through
+    graph = {"declared_blast_radius_bound": 999,
+             "identities": [{"name": "pwned", "reach": ["imds", "control-plane"]}]}
+    write(tmp_path, "b9_credentials", "credential_scope.yaml", yaml.dump(SCOPE_OK))
+    write(tmp_path, "b9_credentials", "iam_graph.json", json.dumps(graph))
+    res = check_creds.run(str(tmp_path), context={})  # no upstream closures
+    assert res.status == "FAIL" and "capped" in res.detail
 
 
 def test_fail_when_missing_files(tmp_path):
-    res = check_creds.run(str(tmp_path), context={})
-    assert res.status == "FAIL"
+    assert check_creds.run(str(tmp_path), context={}).status == "FAIL"
 
 
-def test_run_checks_passes_context_kwarg_automatically(tmp_path):
-    """Integration check: run_checks.py's inspect.signature-based dispatch
-    actually detects check_creds' `context` parameter and wires it up,
-    rather than relying on tests to call it directly."""
+def test_run_checks_passes_context_kwarg_automatically():
     import inspect
-    sig = inspect.signature(check_creds.run)
-    assert "context" in sig.parameters
+    assert "context" in inspect.signature(check_creds.run).parameters
