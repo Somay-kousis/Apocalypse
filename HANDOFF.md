@@ -8,6 +8,10 @@ Verify anytime (offline, no keys):
 ```
 .venv/bin/python -m validation.run_checks --target environments/fixed_lab/configs   # must stay 9/9
 .venv/bin/python -m validation.run_checks --target environments/adversarial_lab/configs  # must stay 0/9
+.venv/bin/python -m validation.measure_sla --target environments/fixed_lab/configs  # must stay 9 HIT
+.venv/bin/python -m validation.simulate_detection --output /tmp/apocalypse-sla --trials 100 --overwrite
+.venv/bin/python -m validation.simulate_integration --output /tmp/apocalypse-integration --trials 3 --overwrite
+.venv/bin/python -m validation.evaluate_detection --output /tmp/apocalypse-quality --overwrite
 .venv/bin/python -m pytest tests/ -q
 ```
 
@@ -95,8 +99,11 @@ does two-layer (NetworkPolicy + RBAC) graph reachability. Still worth your AWS d
   `claude-sonnet-5`. `.env` is gitignored - never commit a real key. (Our AgentRouter/Codex proxy won't work -
   it's UA-gated to the Codex CLI.) Full steps are in `.env.example`.
 - **Reporting guardrail:** adaptive trials are N=0 and must remain labeled unmeasured until the
-  runner is implemented and executed. Only rule 8 has fixture-timestamp SLA evidence (24s); rules
-  1-7 and 9 have declared SLA targets but no measured alert latency.
+  runner is implemented and executed. The offline SLA harness measures committed synthetic evidence
+  for all nine rules (fixed 9 HIT; other labs 9 MISS). The executable simulator additionally measures
+  local matcher time; the contained integration tier performs safe local actions and sends raw
+  telemetry to a separate observer process. The adversarial observer matrix currently reports
+  18 TP / 0 FN / 0 FP / 18 TN. None may be presented as production sensor or SIEM latency.
 
 ---
 ## LOG

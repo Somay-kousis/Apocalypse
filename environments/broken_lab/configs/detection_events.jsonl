@@ -1,0 +1,9 @@
+{"attempt_id":"broken-r1","rule_id":1,"subject_id":"shared-mirror","event":"mirror_hash_mismatch","occurred_at":"2026-07-12T00:00:00Z","detected":false}
+{"attempt_id":"broken-r2","rule_id":2,"subject_id":"worker","event":"egress_denied","occurred_at":"2026-07-12T00:10:00Z","detected":false}
+{"attempt_id":"broken-r3","rule_id":3,"subject_id":"worker","event":"privileged_syscall","occurred_at":"2026-07-12T00:20:00Z","detected":false}
+{"attempt_id":"broken-r4","rule_id":4,"subject_id":"dataset-job","event":"external_ref_load","occurred_at":"2026-07-12T00:30:00Z","detected":false}
+{"attempt_id":"broken-r5","rule_id":5,"subject_id":"dataset-config","event":"template_config_attempt","occurred_at":"2026-07-12T00:40:00Z","detected":false}
+{"attempt_id":"broken-r6","rule_id":6,"subject_id":"worker","event":"metadata_or_token_access","occurred_at":"2026-07-12T00:50:00Z","detected":false}
+{"attempt_id":"broken-r7","rule_id":7,"subject_id":"worker","event":"control_plane_access","occurred_at":"2026-07-12T01:00:00Z","detected":false}
+{"attempt_id":"broken-r8","rule_id":8,"subject_id":"worker","event":"vpn_binary_start","occurred_at":"2026-07-12T01:03:00Z","detected":false}
+{"attempt_id":"broken-r9","rule_id":9,"subject_id":"worker","event":"off_origin_token_use","occurred_at":"2026-07-12T01:10:00Z","detected":false}

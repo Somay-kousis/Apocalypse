@@ -11,6 +11,9 @@
 #   pass_condition : the exact testable condition that flips PASS/FAIL
 #   verification   : how a 3rd party checks it WITHOUT lab network access
 #   detection_sla  : if the control is bypassed, how fast detection must fire  [DRAFT-owner confirms]
+#   detection_event: canonical event name used by offline SLA evidence
+#   detection_sla_seconds: numeric inclusive latency ceiling (machine-readable source of truth)
+#   detection_phase: package pull | predeployment | runtime
 #   adoption_cost  : rough effort for a real org to adopt                       [DRAFT-owner confirms]
 #   check_module   : dotted path -> callable(target_dir[, context]) -> controls.base.CheckResult
 #   sok_class      : class from arXiv:2607.25379 (paper 1)
@@ -40,6 +43,9 @@ controls:
     pass_condition: "Mirror manifest is hash-attested, has no route to shared registry infra, and every declared artifact matches a valid 64-hex SHA-256 pin."
     verification: "Offline mirror-manifest audit plus byte-for-byte SHA-256 verification of each local artifact."
     detection_sla: "Mirror-hash mismatch alerts at pull time (<1 min)."   # DRAFT
+    detection_event: mirror_hash_mismatch
+    detection_sla_seconds: 60
+    detection_phase: "package pull"
     adoption_cost: "Medium - requires per-eval sealed mirror infra."       # DRAFT
     check_module: controls.junyi.check_registry:run
     sok_class: "supply-chain & credential exposure"
@@ -56,6 +62,9 @@ controls:
     pass_condition: "Egress policy is deny-all by default; allowlist entries have matching domain+SNI (no fronting), no wildcards or IP literals, no bare single-label domains; allowlist non-empty."
     verification: "Egress policy audit: default-deny + per-entry domain/SNI-agreement, wildcard, and IP-literal checks (controls/vikas/check_egress.py)."
     detection_sla: "Repeated denied egress alerts (<5 min)."              # DRAFT
+    detection_event: egress_denied
+    detection_sla_seconds: 300
+    detection_phase: runtime
     adoption_cost: "Low-medium - NetworkPolicy / firewall rules."          # DRAFT
     check_module: controls.vikas.check_egress:run
     sok_class: "persistent command-and-control"
@@ -72,6 +81,9 @@ controls:
     pass_condition: "runAsNonRoot true; privileged and allowPrivilegeEscalation false; readOnlyRootFilesystem true; no added caps and ALL dropped; egress off; seccomp RuntimeDefault or Localhost."
     verification: "Container security-context audit."
     detection_sla: "Privileged-syscall / seccomp violation alert (<1 min)." # DRAFT
+    detection_event: privileged_syscall
+    detection_sla_seconds: 60
+    detection_phase: runtime
     adoption_cost: "Low - security-context fields."                          # DRAFT
     check_module: controls.junyi.check_sandbox:run
     sok_class: "objectives conflicting with sandbox boundaries"
@@ -88,6 +100,9 @@ controls:
     pass_condition: "Loader refuses HDF5 external raw storage / external links; driver-restricted opens only."
     verification: "Signed config-schema test suite (SHARED with #5)."
     detection_sla: "External-ref load attempt logged + alert (<1 min)."   # DRAFT
+    detection_event: external_ref_load
+    detection_sla_seconds: 60
+    detection_phase: runtime
     adoption_cost: "Low - loader policy + schema."                         # DRAFT
     check_module: controls.somay.check_hdf5:run
     sok_class: "multi-step offensive chains"
@@ -104,6 +119,9 @@ controls:
     pass_condition: "No template engine renders untrusted config; if unavoidable, SandboxedEnvironment with no builtins."
     verification: "Same signed config-schema test suite as #4."
     detection_sla: "Template-on-config attempt fails at build/pre-deploy (not runtime)." # DRAFT
+    detection_event: template_config_attempt
+    detection_sla_seconds: 0
+    detection_phase: predeployment
     adoption_cost: "Low - parse config as data (yaml.safe_load)."          # DRAFT
     check_module: controls.somay.check_jinja:run
     sok_class: "multi-step offensive chains"
@@ -120,6 +138,9 @@ controls:
     pass_condition: "Link-local (169.254.169.254/32) denied outright, OR IMDSv2-only (HttpTokens required) with hop-limit 1 (hop-limit alone is not sufficient); automountServiceAccountToken strictly boolean false."
     verification: "Pod-spec audit: link-local/hop-limit/http-tokens combination + type-strict automount check (controls/vikas/check_imds.py)."
     detection_sla: "Link-local egress / token-read attempt alert (<1 min)." # DRAFT
+    detection_event: metadata_or_token_access
+    detection_sla_seconds: 60
+    detection_phase: runtime
     adoption_cost: "Low - pod-spec + NetworkPolicy."                         # DRAFT
     check_module: controls.vikas.check_imds:run
     sok_class: "supply-chain & credential exposure"
@@ -136,6 +157,9 @@ controls:
     pass_condition: "No path from a data-plane worker to kubernetes.default.svc API where BOTH NetworkPolicy (network_reachable) AND RBAC (rbac_permitted) permit it at every hop; single-layer-open edges are flagged as a hardening note."
     verification: "RBAC/NetworkPolicy two-layer graph reachability check (controls/vikas/check_controlplane.py)."
     detection_sla: "API-server access from data-plane alert (<1 min)."    # DRAFT
+    detection_event: control_plane_access
+    detection_sla_seconds: 60
+    detection_phase: runtime
     adoption_cost: "Medium - NetworkPolicy + RBAC review."                 # DRAFT
     check_module: controls.vikas.check_controlplane:run
     sok_class: "multi-step offensive chains"
@@ -152,6 +176,9 @@ controls:
     pass_condition: "No plaintext or nested base64/gzip auth key in worker env; key policy is ephemeral and <=24h; one workload's env-dump -> binary-stage -> IMDS -> VPN-start events are ordered, detected, and VPN alert latency is <=60s."
     verification: "Bounded recursive secret decoding plus independent JSONL event correlation and alert-latency calculation."
     detection_sla: "VPN-binary startup / authkey use alert (<1 min)."     # DRAFT
+    detection_event: vpn_binary_start
+    detection_sla_seconds: 60
+    detection_phase: runtime
     adoption_cost: "Low-medium - secret scan + detection rule."           # DRAFT
     check_module: controls.junyi.check_tailscale:run
     sok_class: "persistent command-and-control"
@@ -169,6 +196,9 @@ controls:
     pass_condition: "Stolen token is useless off-origin; AND min-cut reachability over RBAC/IAM/connector configs shows no identity exceeds the declared bound."
     verification: "Credential-scope audit (replay exfil vs Biscuit-attenuated tokens) + min-cut reachability over RBAC/IAM/connector configs (networkx)."
     detection_sla: "Off-origin token use rejected + alert (<1 min); blast-radius recomputed on every IAM change." # DRAFT
+    detection_event: off_origin_token_use
+    detection_sla_seconds: 60
+    detection_phase: runtime
     adoption_cost: "High - workload identity + IAM graph modeling."        # DRAFT
     check_module: controls.somay.check_creds:run
     sok_class: "supply-chain & credential exposure"

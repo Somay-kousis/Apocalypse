@@ -18,9 +18,9 @@ import gzip
 import io
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 from controls.base import CheckResult
+from validation.sla import calculate_latency_seconds, parse_aware_timestamp
 
 BOUNDARY_DIR = "b8_tailscale"
 ENV_FILE = "worker_env.txt"
@@ -86,15 +86,6 @@ def _env_settings(text: str):
     return settings
 
 
-def _parse_time(value):
-    if not isinstance(value, str):
-        raise ValueError("timestamp is missing")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError("timestamp must include a UTC offset")
-    return parsed
-
-
 def _validate_detection_sequence(events):
     """Independently reconstruct the attack sequence for one workload.
 
@@ -121,15 +112,14 @@ def _validate_detection_sequence(events):
                 errors.append(f"{event.get('event')} for {workload} was not detected")
                 break
             try:
-                occurred = _parse_time(event.get("occurred_at"))
-                alerted = _parse_time(event.get("alerted_at"))
+                occurred = parse_aware_timestamp(event.get("occurred_at"), "occurred_at")
+                latency = calculate_latency_seconds(
+                    event.get("occurred_at"), event.get("alerted_at")
+                )
             except (TypeError, ValueError) as exc:
                 errors.append(f"invalid detection timestamp for {workload}: {exc}")
                 break
-            if alerted < occurred:
-                errors.append(f"alert precedes event for {workload}")
-                break
-            selected.append((event, occurred, alerted))
+            selected.append((event, occurred, latency))
             cursor += 1
 
         if cursor != len(REQUIRED_SEQUENCE):
@@ -138,8 +128,7 @@ def _validate_detection_sequence(events):
         if occurred_times != sorted(occurred_times):
             errors.append(f"attack sequence is out of order for {workload}")
             continue
-        vpn_event, vpn_occurred, vpn_alerted = selected[-1]
-        latency = (vpn_alerted - vpn_occurred).total_seconds()
+        latency = selected[-1][2]
         if latency > 60:
             errors.append(f"vpn startup alert missed <1 min SLA for {workload}: {latency:.0f}s")
             continue

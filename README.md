@@ -10,7 +10,7 @@ laptop in seconds and watches the score move from 0/9 (broken) to 9/9 (fixed). T
 Track 1's literal success bar: *verifiable by third parties without lab network access* - offline,
 no API keys, no cluster.
 
-Current status: **fixed 9/9 - broken / exploit / adversarial 0/9 - replay 13/13 - fail-closed.**
+Current status: **fixed 9/9 - insecure labs 0/9 - replay 13/13 - SLA 9/9 - contained integration 9/9 - observer quality 18 TP / 0 FN / 0 FP / 18 TN.**
 
 ## The evidence constraint (read this first)
 There is **no 17,600-action corpus**. Hugging Face's "interactive replay" ships no JSON/CSV/IOC/YARA -
@@ -31,7 +31,12 @@ larger corpus - it does not exist (also a finding for the report's limitations s
 - `validation/run_checks.py` - scorecard runner (N/9), **fail-closed** (a hostile config fails one
   rule, never crashes the suite). `replay_attack.py` - replays the 13 boundary-testing steps (of
   14 documented commands - 3 are context-only recon/cleanup, not boundary tests) vs a target.
-  Both **offline, no keys**. `adaptive_agent.py` - optional LLM stretch (only thing needing a key).
+  `measure_sla.py` calculates fixture detection latency for all 9 rules. `simulate_detection.py`
+  runs harmless local event generators through independent matchers and writes fresh evidence with
+  a provenance manifest. `simulate_integration.py` goes further with temporary files, loopback-only
+  connections, a child-process syscall attempt, real HDF5/Jinja/token operations, and local process
+  observation; its detector runs in a separate process. `evaluate_detection.py` scores attack and
+  benign variants per rule. All are **offline, no keys**. `adaptive_agent.py` is an optional stretch.
 - `analysis/threshold_model.ipynb` - headline number from the public day counts.
 - `report/` - draft, control matrix, `figures/trust_boundaries.png` (+ its generator).
 - `tests/test_somay_section.py` - executable tests for rules 4/5/9 + the token primitive.
@@ -43,8 +48,16 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m validation.run_checks    --target environments/fixed_lab/configs    # 9/9
 .venv/bin/python -m validation.run_checks    --target environments/broken_lab/configs   # 0/9
 .venv/bin/python -m validation.replay_attack --target environments/fixed_lab/configs    # 13/13 blocked
-.venv/bin/python -m pytest tests/ -q                                                    # 76 passed
+.venv/bin/python -m validation.measure_sla   --target environments/fixed_lab/configs    # 9/9 HIT
+.venv/bin/python -m validation.simulate_detection --output /tmp/apocalypse-sla --trials 100
+.venv/bin/python -m validation.simulate_integration --output /tmp/apocalypse-integration --trials 3
+.venv/bin/python -m validation.evaluate_detection --output /tmp/apocalypse-quality
+.venv/bin/python -m pytest tests/ -q                                                    # 103 passed
 ```
+
+Simulator latency covers only local in-process matching. It does not measure production sensors,
+log transport, a SIEM, or notification delivery. The integration command uses only temporary
+resources and `127.0.0.1`; some restricted sandboxes require permission for loopback and `ps`.
 
 ## Owners
 - **Somay** - rules 4,5,9 + runner/architecture (control_spec, fail-closed runner, incident record,

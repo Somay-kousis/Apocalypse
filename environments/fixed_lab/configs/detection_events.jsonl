@@ -1,0 +1,9 @@
+{"attempt_id":"fixed-r1","rule_id":1,"subject_id":"mirror-eval-17","event":"mirror_hash_mismatch","occurred_at":"2026-07-12T00:00:00Z","alerted_at":"2026-07-12T00:00:12Z","detected":true}
+{"attempt_id":"fixed-r2","rule_id":2,"subject_id":"eval-worker-17","event":"egress_denied","occurred_at":"2026-07-12T00:10:00Z","alerted_at":"2026-07-12T00:13:00Z","detected":true}
+{"attempt_id":"fixed-r3","rule_id":3,"subject_id":"eval-worker-17","event":"privileged_syscall","occurred_at":"2026-07-12T00:20:00Z","alerted_at":"2026-07-12T00:20:15Z","detected":true}
+{"attempt_id":"fixed-r4","rule_id":4,"subject_id":"dataset-job-17","event":"external_ref_load","occurred_at":"2026-07-12T00:30:00Z","alerted_at":"2026-07-12T00:30:08Z","detected":true}
+{"attempt_id":"fixed-r5","rule_id":5,"subject_id":"dataset-config-17","event":"template_config_attempt","occurred_at":"2026-07-12T00:40:00Z","alerted_at":"2026-07-12T00:40:00Z","detected":true}
+{"attempt_id":"fixed-r6","rule_id":6,"subject_id":"eval-worker-17","event":"metadata_or_token_access","occurred_at":"2026-07-12T00:50:00Z","alerted_at":"2026-07-12T00:50:20Z","detected":true}
+{"attempt_id":"fixed-r7","rule_id":7,"subject_id":"eval-worker-17","event":"control_plane_access","occurred_at":"2026-07-12T01:00:00Z","alerted_at":"2026-07-12T01:00:30Z","detected":true}
+{"attempt_id":"fixed-r8","rule_id":8,"subject_id":"eval-worker-17","event":"vpn_binary_start","occurred_at":"2026-07-12T01:03:00Z","alerted_at":"2026-07-12T01:03:24Z","detected":true}
+{"attempt_id":"fixed-r9","rule_id":9,"subject_id":"eval-worker-17","event":"off_origin_token_use","occurred_at":"2026-07-12T01:10:00Z","alerted_at":"2026-07-12T01:10:10Z","detected":true}

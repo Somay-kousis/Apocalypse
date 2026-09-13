@@ -120,6 +120,34 @@ score 0/9. Two rounds of self-directed red-teaming found and fixed 15 false-nega
 (10 in round 1 across the whole suite; 5 more found deepening rules 2, 6, and 7 specifically),
 documented with root cause and fix in `RED_TEAM.md`.
 
+The offline SLA harness separately evaluates committed attempt/alert evidence for all nine rules.
+The fixed fixture records 9 hits and no misses or unmeasured rules; broken attempts are undetected,
+exploit alerts are late, and malformed adversarial evidence fails closed. These numbers demonstrate
+the measurement method against synthetic evidence, not production sensor latency.
+
+An executable local simulator strengthens this check by generating harmless events for all nine
+rules, running independent matchers, and timestamping the resulting alerts rather than supplying
+the alert timestamps in advance. A 100-trial-per-rule acceptance run produced 900 records and nine
+SLA hits. Its microsecond-scale measurements cover only in-process matching; production collection,
+transport, SIEM, and notification latency remain unmeasured.
+
+We also ran a contained integration tier that performs the harmless underlying action instead of
+only constructing its record. It corrupts temporary bytes, makes loopback-only requests, attempts
+`setuid(0)` inside a child process, exercises real HDF5/Jinja/token primitives, and observes a
+short-lived `tailscaled`-named sleep process through the local process table. Three trials per rule
+produced 27 records and nine SLA hits. Raw telemetry is classified by a separate observer process,
+so the action driver does not assign its own final alert. Because the test Mac had no Docker or local
+Kubernetes, this still does not measure Linux seccomp/eBPF, NetworkPolicy/RBAC, production sensors,
+or SIEM delivery.
+The fidelity is therefore intentionally split: Rules 1, 4, 5, and 9 execute their core primitive
+locally, while Rules 2, 3, 6, 7, and 8 use safe local stand-ins. All nine are exercised, but none is
+a production-grade simulation; the rule-by-rule classification appears in `report/results.md`.
+
+A separate adversarial quality matrix evaluated two attack and two benign event variants for every
+rule. It produced 18 true positives, no false negatives, no false positives, and 18 true negatives;
+all attack observations also met their fixture SLA. This establishes a small deterministic baseline
+for detector correctness, not a statistically representative false-positive rate.
+
 ## Limitations & Dual-Use Appendix
 **Verification is mostly at the config-audit level, not a live cluster.** Our checkers read declared
 YAML/JSON state - pod specs, RBAC graphs, egress policy, credential manifests - the same surface a
@@ -129,9 +157,10 @@ live traffic, so a deployment that declares a hardened config but silently drift
 list as a stretch goal. Rule 1 now hashes the supplied offline artifacts instead of trusting the
 manifest's hash strings, but those small fixtures are not packages fetched from a live registry.
 Rule 8 reconstructs event order and alert latency from JSONL evidence instead of trusting a
-`sequence_matched` flag, but it cannot prove the sensor emitted every real event. Rules 4, 5, and 9 partially address this by executing the actual exploit
-primitive against a reference implementation of the relevant component, but that reference
-implementation is still ours, not the target system's real loader/renderer/credential broker.
+`sequence_matched` flag, but it cannot prove the sensor emitted every real event. The contained
+integration tier executes the core local primitive for Rules 1, 4, 5, and 9, but those reference
+implementations are still ours, not the target system's real registry, loader, renderer, or
+credential broker.
 
 **The evidence base is genuinely thin.** There is no 17,600-action corpus. Hugging Face's public
 replay is 9 phase totals, 5 day counts, and 14 example commands; we curated all of it, and that
