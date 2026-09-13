@@ -97,3 +97,16 @@ def test_fail_when_layers_open_across_a_multi_hop_pivot(tmp_path):
 def test_fail_when_missing_file(tmp_path):
     res = check_controlplane.run(str(tmp_path))
     assert res.status == "FAIL"
+
+
+def test_decoy_api_node_does_not_shadow_real_reachable(tmp_path):
+    """Red-team regression: a benign api-named node must not shadow a real,
+    reachable API node - every identified API node is checked, not just the first."""
+    graph = {
+        "nodes": ["apiserver-decoy", "kube-apiserver", "worker"],
+        "edges": [{"from": "worker", "to": "kube-apiserver",
+                   "network_reachable": True, "rbac_permitted": True}],
+    }
+    write(tmp_path, "b7_controlplane", "rbac_graph.yaml", yaml.dump(graph))
+    res = check_controlplane.run(str(tmp_path))
+    assert res.status == "FAIL" and "kube-apiserver" in res.detail

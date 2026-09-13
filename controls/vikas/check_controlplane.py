@@ -29,31 +29,27 @@ def _node_name(node) -> str:
     return node.get("name") if isinstance(node, dict) else node
 
 
-def _find_api_node(nodes):
-    """Identify the control-plane/API-server node structurally.
+def _find_api_nodes(nodes):
+    """Identify EVERY control-plane/API-server node structurally.
 
-    Returns the node's name, or None if it can't be identified - callers must
-    treat None as fail-closed (unconstrained graph), never as "no target, so
-    nothing is reachable."
+    Returns a list of node names (possibly empty). Callers must treat an empty
+    list as fail-closed, and must check reachability to ALL of them - a decoy
+    api-named node must not shadow a real, reachable one.
     """
     has_role_field = any(isinstance(n, dict) and (n.get("role") or n.get("type")) for n in nodes)
-
     if has_role_field:
-        matches = [
+        return [
             _node_name(n) for n in nodes
             if isinstance(n, dict) and (
                 str(n.get("role", "")).lower() in _CONTROL_PLANE_VALUES or
                 str(n.get("type", "")).lower() in _CONTROL_PLANE_VALUES
             )
         ]
-        return matches[0] if len(matches) == 1 else (matches[0] if matches else None)
-
-    matches = [
+    return [
         _node_name(n) for n in nodes
         if str(_node_name(n)).lower() in (p.lower() for p in _API_NODE_NAME_PATTERNS)
         or any(pat in str(_node_name(n)).lower() for pat in _API_NODE_NAME_PATTERNS)
     ]
-    return matches[0] if len(matches) == 1 else (matches[0] if matches else None)
 
 
 def _exploitable(edge: dict) -> bool:
@@ -111,9 +107,9 @@ def run(target_dir: str) -> CheckResult:
     exploitable_edges = [(e["from"], e["to"]) for e in edges if _exploitable(e)]
 
     node_names = [_node_name(n) for n in nodes]
-    api_node = _find_api_node(nodes)
+    api_nodes = _find_api_nodes(nodes)
 
-    if api_node is None:
+    if not api_nodes:
         return CheckResult(7, "Control-plane unreachable from workers", "FAIL",
                             "could not structurally identify a control-plane/API-server node in "
                             f"{BOUNDARY_DIR}/{CONFIG_FILE} (no role/type field and no name matched "
@@ -121,14 +117,18 @@ def run(target_dir: str) -> CheckResult:
                             "proves nothing about reachability",
                             evidence=[str(cfg)])
 
-    worker_nodes = [n for n in node_names if n != api_node]
-    reachable_from = [w for w in worker_nodes if _reachable(node_names, exploitable_edges, w, api_node)]
+    api_set = set(api_nodes)
+    worker_nodes = [n for n in node_names if n not in api_set]
+    reachable_from = [
+        f"{w}->{a}" for w in worker_nodes for a in api_nodes
+        if _reachable(node_names, exploitable_edges, w, a)
+    ]
 
     if reachable_from:
         return CheckResult(7, "Control-plane unreachable from workers", "FAIL",
-                            f"API server reachable from: {', '.join(reachable_from)} "
-                            f"(both NetworkPolicy and RBAC permit the route; API node identified as "
-                            f"'{api_node}')",
+                            f"API server reachable: {', '.join(reachable_from)} "
+                            f"(both NetworkPolicy and RBAC permit the route; API nodes: "
+                            f"{', '.join(api_nodes)})",
                             evidence=[str(cfg)])
 
     warnings = [w for e in edges for w in [_single_layer_open(e)] if w]

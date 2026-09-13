@@ -19,6 +19,7 @@ import base64
 import binascii
 import gzip
 import io
+import zlib
 import json
 import re
 from pathlib import Path
@@ -57,6 +58,13 @@ def _decoded_text(raw: bytes):
             with gzip.GzipFile(fileobj=io.BytesIO(raw)) as gz:
                 raw = gz.read(MAX_DECODED_BYTES + 1)
         except (OSError, EOFError):
+            return None
+        if len(raw) > MAX_DECODED_BYTES:
+            return None
+    elif raw[:1] == b"\x78":  # zlib/deflate header
+        try:
+            raw = zlib.decompress(raw)
+        except zlib.error:
             return None
         if len(raw) > MAX_DECODED_BYTES:
             return None
@@ -108,6 +116,20 @@ def _decode_candidates(text: str):
                 decoded_values.append(bytes.fromhex(token))
             except ValueError:
                 pass
+        # base85 / ascii85: charset is punctuation-heavy, so try decoders on each
+        # non-whitespace token (and its post-'=' env value) rather than a tight regex.
+        for token in re.findall(r"\S{16,131072}", candidate):
+            variants = {token}
+            if "=" in token:
+                variants.add(token.split("=", 1)[1])  # value of a KEY=value assignment
+            for v in variants:
+                if len(v) < 16:
+                    continue
+                for decoder in (base64.a85decode, base64.b85decode):
+                    try:
+                        decoded_values.append(decoder(v))
+                    except (ValueError, binascii.Error):
+                        pass
 
         for raw in decoded_values:
             decoded = _decoded_text(raw)
