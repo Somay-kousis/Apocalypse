@@ -1,4 +1,14 @@
-# Figures Directory
+# Figures
 
-Store all diagrams, visual assets, and charts here.
-Particularly, this folder will hold the core deliverable: The incident's trust-boundary diagram redrawn with our nine rules pinned to the edges they close.
+Reproducible generators (deterministic, print-friendly, grayscale-safe, no keys).
+
+| File | Generator | What it shows |
+|------|-----------|---------------|
+| `trust_boundaries.png` | `make_trust_boundaries.py` | The July-2026 kill chain across 5 trust zones, each of the 9 rules pinned to the edge it closes |
+| `scorecard.png` | `make_plots.py` | 9 controls x 4 targets: hardened 9/9, every attacker config 0/9 (the core "it works" proof) |
+| `quarantine_timing.png` | `make_plots.py` | Headline number: action-rate quarantine fires ~41.6h before the Day-3 spike, with the 500/1000/2000 sensitivity band |
+| `detection_quality.png` | `make_plots.py` | Detection confusion matrix over 36 cases: 18 TP / 0 FP / 0 FN / 18 TN |
+
+Regenerate all: `python report/figures/make_trust_boundaries.py && python report/figures/make_plots.py`
+Data is computed live from the labs and `analysis/data/incident_public_record.json`; the
+detection-quality aggregate comes from `python -m validation.evaluate_detection`.
