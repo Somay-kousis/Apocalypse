@@ -40,7 +40,7 @@ larger corpus - it does not exist (also a finding for the report's limitations s
 - `analysis/threshold_model.ipynb` - headline number from the public day counts.
 - `report/` - draft, control matrix, `figures/trust_boundaries.png` (+ its generator).
 - `tests/test_somay_section.py` - executable tests for rules 4/5/9 + the token primitive.
-- `RED_TEAM.md` - the 10 bypasses found and fixed. `HANDOFF.md` - status + task board.
+- `RED_TEAM.md` - every red-team bypass found and fixed (see its table). `HANDOFF.md` - status + task board.
 
 ## Quickstart (offline, ~seconds, no API keys)
 ```bash
@@ -52,7 +52,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m validation.simulate_detection --output /tmp/apocalypse-sla --trials 100
 .venv/bin/python -m validation.simulate_integration --output /tmp/apocalypse-integration --trials 3
 .venv/bin/python -m validation.evaluate_detection --output /tmp/apocalypse-quality
-.venv/bin/python -m pytest tests/ -q                                                    # 116 passed
+.venv/bin/python -m pytest tests/ -q                                                    # 118 passed
 ```
 
 Simulator latency covers only local in-process matching. It does not measure production sensors,

@@ -46,7 +46,7 @@ Verify anytime (offline, no keys):
 - **Headline number** computed in `analysis/threshold_model.ipynb`: quarantine at a per-identity action-rate
   threshold fires **41.6 h before the Day-3 spike** (band: 500->44.8h, 1000->41.6h, 2000->35.3h).
 - **Figure:** `report/figures/trust_boundaries.png` (+ reproducible generator).
-- **Status:** fixed 9/9, broken/exploit/adversarial 0/9, replay 13/13, `pytest tests/` 116/116 passing.
+- **Status:** fixed 9/9, broken/exploit/adversarial 0/9, replay 13/13, `pytest tests/` 118/118 passing.
 - **Note on biscuit:** the `biscuit-python` Rust binding won't build on modern Python, so rule 9's off-origin
   replay result is modeled declaratively via `credential_scope.yaml` rather than a live mint/verify - key for a
   judge-runnable artifact with no extra native deps.
@@ -87,7 +87,7 @@ does two-layer (NetworkPolicy + RBAC) graph reachability. Still worth your AWS d
 - **Threat model + Limitations & Dual-Use:** the report now states attacker capabilities, defender-controlled
   evidence, the bounded security claim, compositional containment, and the remaining mock/runtime limitations.
 - Verified: fixed 9/9; broken/exploit/adversarial 0/9; replay 13/13; focused security tests 33/33;
-  full suite 116/116.
+  full suite 118/118.
 - **Papers for these rules:** [2] arXiv:2604.23425 ("the agent is the adversary" - threat model);
   [1] arXiv:2607.25379 (classes "persistent C2" + "multi-step chains" = rules 8/3).
 
@@ -132,4 +132,13 @@ does two-layer (NetworkPolicy + RBAC) graph reachability. Still worth your AWS d
    requirement; added unit and adversarial fixtures for both bypasses. Documented Rule 1 integrity-vs-authenticity.
    Verified fixed 9/9, three attack labs 0/9, replay 13/13, focused tests 33/33, full suite 116/116.
    NEXT: commit the Junyi follow-up after review; Vikas still owns the separately reported Rule 7 node-identity fix.
+## 2026-09-13 (Somay, round-3 red-team, branch finalize-hardening) - GREEN: re-attacked the whole
+   project on latest main. Confirmed Vikas's rule-7 rename fix (7d38d5f) and Junyi's rule-8 encoded-key
+   fix (13eb12a) both hold. Found + fixed TWO new bypasses: rule 7 decoy api-node shadowing (a benign
+   api-named node listed first hid a real reachable one - now checks ALL identified api nodes) and rule 8
+   base85/ascii85 authkey evasion (added a85/b85 + zlib to the decoder). Swept rules 1-6/9: no further
+   bypasses. Added regression tests. fixed 9/9, attack labs 0/9, replay 13/13, pytest 118/118. NOTE: these
+   two fixes edit controls/vikas/check_controlplane.py and controls/junyi/check_tailscale.py (whole-project
+   pass, flagged in commit msgs) - Vikas/Junyi should review. NEXT: teammate review of the two fixes; report prose.
+
 ## <date> (<name>) - GREEN: / BROKEN: / NEXT:

@@ -31,6 +31,8 @@ originally PASSed (a false negative), plus the fix. Reproduce with `environments
 | 8c | Repeated base64 wrapping could hide a gzip-packed auth key from the one-pass decoder | decoder inspected only the first encoding layer | bounded recursive decoding (4 layers, 64 KiB output cap) before auth-key matching |
 | 8d | A reusable Tailscale auth key encoded as hex (likewise base32, URL-safe base64, or percent-URL encoding) passed the decoder-aware scan | decoder only attempted standard base64 and gzip even though its description implied broader decoder awareness | recursively attempt the explicitly documented standard/URL-safe base64, base32, hex, percent-URL, and gzip formats under the existing depth/output bounds; add one regression per format and a hex adversarial fixture |
 | 8e | A complete detected sequence for one workload masked an undetected `vpn_binary_start` on another workload | sequence validation returned PASS on the first clean workload (ANY semantics) | audit every workload containing any required attack event and require each to have the complete, ordered, detected, on-time sequence (ALL semantics) |
+| 7c | round-3: a benign api-named **decoy node** listed first shadowed a real, reachable API node - only `matches[0]` was checked as the reachability target | single-target identification after the round-2 structural-id fix | identify EVERY control-plane/API node (`_find_api_nodes`) and check reachability from every worker to ALL of them; fail-closed if none identifiable |
+| 8f | round-3: a reusable authkey **ascii85/base85-encoded** (or zlib-compressed) evaded the base64/base32/hex/URL/gzip decoder set | base85/zlib not attempted | added a85/b85 decoding (also trying the post-`=` env value) and a zlib layer to the bounded recursive decoder; regression tests for both |
 
 ## Post-fix scorecard (offline, seconds)
 - `fixed_lab`      -> 9/9 PASS (was silently 7/9 until the hdf5/jinja path fix above)
@@ -38,7 +40,7 @@ originally PASSed (a false negative), plus the fix. Reproduce with `environments
 - `exploit_lab`    -> 0/9 (round-1 attacker configs; now includes b1/b2/b3/b6/b7/b8/b9 fixtures)
 - `adversarial_lab`-> 0/9 (round-2, these bypasses; now includes b1/b2/b3/b6/b7/b8/b9 fixtures)
 - malformed JSON   -> fails the affected rule, suite still completes (fail-closed)
-- `pytest tests/`  -> 116/116 passing; focused Rule 8 regressions now include each supported
+- `pytest tests/`  -> 118/118 passing; focused Rule 8 regressions now include each supported
   encoding and the multi-workload masking case
 
 ## Known limitations (be honest in the report)
