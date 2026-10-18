@@ -1,5 +1,13 @@
 # Apocalypse - Track 1: Containment Standards
 
+<p align="center">
+  <img src="https://img.shields.io/badge/language-Python-3776AB.svg" alt="Python" />
+  <img src="https://img.shields.io/badge/pytest-tests-0A9EDC.svg" alt="pytest" />
+  <img src="https://img.shields.io/badge/cryptography-Ed25519-2F2F2F.svg" alt="cryptography" />
+  <img src="https://img.shields.io/badge/pandas-analysis-150458.svg" alt="pandas" />
+  <img src="https://img.shields.io/badge/Jupyter-notebook-F37626.svg" alt="Jupyter" />
+</p>
+
 Submission for the Apart x CeSIA **AI Incident Response Sprint** (Sep 11-13, 2026), Track 1.
 Case study: the **July 9-13, 2026 frontier-model sandbox escape** (OpenAI eval model -> Hugging Face).
 
